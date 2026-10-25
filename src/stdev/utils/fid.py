@@ -18,10 +18,10 @@ REAL_STATE_NAMES = (
 class RealImageDataset(Dataset):
     """Raw images with the same preprocessing as in scripts/encode_dataset.py."""
 
-    def __init__(self, image_dir: str, image_size: int):
+    def __init__(self, image_dir: str, image_size: int, file_names: list[str] | None = None):
         self.image_dir = image_dir
         self.image_size = image_size
-        self.files = sorted(os.listdir(image_dir))
+        self.files = sorted(os.listdir(image_dir)) if file_names is None else file_names
 
     def __len__(self):
         return len(self.files)
@@ -53,6 +53,7 @@ class FIDEvaluator:
         device: str = "cuda",
         batch_size: int = 256,
         num_workers: int = 8,
+        file_names: list[str] | None = None,
     ):
         self.device = device
         self.metric = FrechetInceptionDistance(feature=2048, reset_real_features=False).to(device)
@@ -61,7 +62,7 @@ class FIDEvaluator:
             self._load_real_statistics(stats_path)
         else:
             self._compute_real_statistics(
-                RealImageDataset(real_image_dir, image_size),
+                RealImageDataset(real_image_dir, image_size, file_names),
                 batch_size,
                 num_workers,
             )

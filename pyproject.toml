@@ -22,8 +22,13 @@ dependencies = [
     "tensorboard",
     "torchmetrics[image]",
     "omegaconf",
-    "vaezip"
+    "vaezip",
+    "ipywidgets",
+    "rqi",
 ]
+
+[tool.uv.sources]
+rqi = { path = "rqi", editable = true }
 
 [project.optional-dependencies]
 dev = [

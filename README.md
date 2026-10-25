@@ -8,6 +8,10 @@ source .venv/bin/activate
 # adjust to your CUDA version
 uv pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu134
 uv pip install -e .
+
+# additional
+git clone https://github.com/tensorforger/rqi
+uv pip install ./rqi
 ```
 
 ### Models

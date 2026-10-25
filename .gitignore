@@ -1,4 +1,4 @@
-dev/
+rqi/
 
 .vscode/
 local_samples/
@@ -16,6 +16,11 @@ prepared_datasets/
 # Generations
 samples/
 runs/
+
+# Benchmark data and results
+benchmark_datasets/
+benchmark_cache/
+raw_results/
 
 # Tensors and latent data
 precomputes/
