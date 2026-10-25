@@ -77,7 +77,7 @@ class Flux2VAE(ImageVAE):
         """
         image = image.mul(2)
         image = image.sub(1)
-        latents = self.model.encode(image.to(self.dtype)).latent_dist.sample()
+        latents = self.model.encode(image.to(self.dtype)).latent_dist.mean
         latents = self.norm_unpatchified_latents(latents)
 
         return latents

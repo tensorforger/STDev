@@ -3,7 +3,6 @@ rqi/
 .vscode/
 local_samples/
 
-# Smoke-test results (configs/*fast.yaml)
 results/*fast/
 
 # Weights
@@ -12,6 +11,7 @@ models/
 # Dataset
 datasets/
 prepared_datasets/
+train_datasets/
 
 # Generations
 samples/
