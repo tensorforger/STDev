@@ -11,9 +11,10 @@ class Upscaler(ABC):
     """
 
     @abstractmethod
-    def train(self) -> None:
+    def train(self, smoke_mode: bool = False) -> None:
         """
         Strats the training process.
+        In smoke_mode should return after several training steps.
         """
 
     @abstractmethod

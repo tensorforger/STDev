@@ -35,4 +35,4 @@ def add_tensors(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> torch.Tensor:
 ## Development tools
 
 - Never use HEREDOC (`<<EOF`) patterns for file creation or multi-line commands in terminal tool execution. They sometimes hang terminal.
-- For code experiments if you need them, use `./dev/<task_name>` directory, for example `./dev/task_1`. You are allowed to make any testing scripts and store any temporary test data there.
+- For code experiments if you need them, use `./dev` directory. You are allowed to make any testing scripts and store any temporary test data there.
