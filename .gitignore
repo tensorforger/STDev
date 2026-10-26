@@ -22,9 +22,12 @@ runs/
 benchmark_datasets/
 benchmark_cache/
 raw_results/
+tensorboard/
+train_logs/
 
 # Tensors and latent data
 precomputes/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

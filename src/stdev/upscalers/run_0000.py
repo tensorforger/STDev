@@ -10,6 +10,7 @@ import torch.nn.functional as functional
 import vaezip
 from safetensors.torch import load_file, save_file
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
 
 from stdev.upscalers.base import Upscaler
 
@@ -17,6 +18,7 @@ RUN_NAME = "run_0000"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 DATASET_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_5k"
 OUTPUT_DIRECTORY = REPOSITORY_ROOT / "trained_models" / RUN_NAME
+TENSORBOARD_DIRECTORY = REPOSITORY_ROOT / "tensorboard"
 MODEL_FILE_NAME = "model.safetensors"
 EMA_MODEL_FILE_NAME = "ema_model.safetensors"
 
@@ -254,6 +256,8 @@ class Run0000Upscaler(Upscaler):
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         print(f"{RUN_NAME}: {parameter_count / 1e6:.2f}M parameters", flush=True)
 
+        run_log_name = f"{RUN_NAME}_smoke" if smoke_mode else RUN_NAME
+        summary_writer = SummaryWriter(str(TENSORBOARD_DIRECTORY / run_log_name))
         batches = iterate_batches(data_loader)
         latents_full, latents_div_2 = next(batches)
         training_start_time = time.perf_counter()
@@ -285,11 +289,11 @@ class Run0000Upscaler(Upscaler):
             loss_sum += loss.detach()
             elapsed_seconds = time.perf_counter() - training_start_time
             if step % LOG_INTERVAL_STEPS == 0:
+                mean_loss = loss_sum.item() / LOG_INTERVAL_STEPS
                 print(
-                    f"step {step} loss {loss_sum.item() / LOG_INTERVAL_STEPS:.4f} "
-                    f"elapsed {elapsed_seconds:.0f}s",
-                    flush=True,
+                    f"step {step} loss {mean_loss:.4f} elapsed {elapsed_seconds:.0f}s", flush=True
                 )
+                summary_writer.add_scalar("train/loss", mean_loss, step)
                 loss_sum.zero_()
 
             if smoke_mode:
@@ -300,6 +304,7 @@ class Run0000Upscaler(Upscaler):
                 break
             latents_full, latents_div_2 = next(batches)
 
+        summary_writer.close()
         OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
         save_file(model.state_dict(), str(OUTPUT_DIRECTORY / MODEL_FILE_NAME))
         save_file(ema_model.state_dict(), str(OUTPUT_DIRECTORY / EMA_MODEL_FILE_NAME))

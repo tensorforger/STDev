@@ -46,7 +46,7 @@ round_failed=0
 for run_id in "${run_ids[@]}"; do
     run_name="run_${run_id}"
     run_file="src/stdev/upscalers/${run_name}.py"
-    log_directory="trained_models/${run_name}"
+    log_directory="train_logs/${run_name}"
     mkdir -p "$log_directory"
 
     echo "=== ${run_name}: training ==="
