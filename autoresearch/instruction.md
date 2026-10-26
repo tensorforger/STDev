@@ -4,6 +4,9 @@
 
 - Number of runs per round **N=2**
 - Dataset should be used for model training **DATASET=`./train_datasets/flux_1024_5k`**
+- GPU memory available to a run **VRAM_LIMIT=32** GB (one RTX 5090). A run may use the entire GPU.
+- Runs of a round are currently executed **sequentially** on a single GPU by `start_round.sh` (a round takes about N x 35 min). Later, runs will be parallel across a multi-GPU machine.
+- Run `0000` is the reference baseline. New run IDs continue from the highest existing ID.
 
 ## Role
 
@@ -92,7 +95,7 @@ There is no simple goal here: you are jointly optimizing a set of objectives.
 
 They can approximately be ordered by the priority:
 
-1. Benchmark quality metrics (FID and RQI are prioritized)
+1. Benchmark quality metrics. FID (lower is better) is the primary and more reliable metric. RQI (higher is better) is new and experimental; use it mainly when FID is saturated. Differences below ~0.5 FID or ~0.01 RQI are treated as noise (single seed) until measured.
 2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized)
 3. Training loss (for equivalent loss and data setups, for architecture design only)
 4. Implementation simplicity (as a term of regularization)
@@ -113,7 +116,9 @@ Profiling results (CPU and CUDA time) is in `./raw_results/<dataset_name>/run_<r
 
 4. Update `./autoresearch/experiment_logs.md`.
 
-5. Check run (fits in VRAM, no errors) by calling runner with a list of run IDs, e.g.
+Units in `metrics.json`: latency in ms, `cuda_mem_*` in MB.
+
+5. Check run (fits in VRAM, no errors) by calling runner with a list of run IDs. Smoke passes if training and benchmark both exit 0 for every run, e.g.
 
 ```bash
 ./infra/start_round.sh "0002" "0003" "0004" --smoke
@@ -125,7 +130,7 @@ Profiling results (CPU and CUDA time) is in `./raw_results/<dataset_name>/run_<r
 ./infra/start_round.sh "0002" "0003" "0004"
 ```
 
-Call this line in the background terminal and set system notification on it's readiness.
+Call this line as an async background terminal command. The system notifies the agent on completion: do not poll or sleep, end the turn and wait. When the notification arrives, the iteration is finished; analyze the results as step 1 of the next iteration.
 
 ## Research Principles
 
