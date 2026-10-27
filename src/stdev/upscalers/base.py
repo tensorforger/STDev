@@ -40,6 +40,18 @@ class Upscaler(ABC):
         """
 
     @abstractmethod
+    def single_forward(self, tensor: torch.Tensor, prompt_embeds: torch.Tensor) -> torch.Tensor:
+        """
+        Runs the underlying model exactly once on dummy internal inputs (e.g. random noise and a
+        fixed noise level). Used only by the latency benchmark, not for producing images.
+        args:
+            tensor: [B, C, H_lr, W_lr], dtype = float32 (or float16, bfloat16), device = "cuda"
+            prompt_embeds: [B, 77, 768], dtype = float32, SDXL text encoder embeddings
+        returns:
+            tensor: model output for the high resolution grid, any dtype
+        """
+
+    @abstractmethod
     def get_name(self) -> str:
         """
         Returns the name of upsclaer

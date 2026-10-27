@@ -30,7 +30,7 @@ WARMUP_ITERATIONS = 10
 BENCHMARK_ITERATIONS = 50
 SMOKE_ITERATIONS = 2
 SMOKE_NUM_SAMPLES = 2
-NUM_SAVED_SAMPLES = 8
+NUM_SAVED_SAMPLES = 32
 LATENT_CODEC = "lbrq_8bit"
 PROMPT_EMBEDS_SHAPE = (1, 77, 768)
 SEED = 0
@@ -163,9 +163,7 @@ def run_benchmark(exit_stack: ExitStack) -> None:
         torch._dynamo.reset()
     quality: dict[str, dict[str, float]] = {}
     for dataset_path, dataset_name in zip(arguments.datasets, dataset_names):
-        dataset = BenchmarkDataset(
-            dataset_path, max_samples=SMOKE_NUM_SAMPLES if smoke else None
-        )
+        dataset = BenchmarkDataset(dataset_path, max_samples=SMOKE_NUM_SAMPLES if smoke else None)
         quality[dataset_name] = measure_quality(
             upscaler=upscaler,
             vae=vae,

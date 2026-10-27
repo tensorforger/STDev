@@ -84,20 +84,21 @@ def measure_latency(
     seed: int,
 ) -> dict[str, float]:
     """
-    Measures latency over timed passes, then saves the CPU and CUDA time profile of one extra pass.
-    The upscaler input is random latents of the low resolution matching the output `resolution`.
+    Measures the latency of a single model forward pass over timed passes, then saves the CPU and
+    CUDA time profile of one extra pass.
+    The input is random latents of the low resolution matching the output `resolution`.
     """
     latents = _make_random_latents(latent_channels, latent_size, scale_factor, dtype, seed)
 
     with torch.no_grad():
         for _ in tqdm(range(warmup_iterations), desc=f"Warmup {resolution}", leave=False):
-            upscaler.upscale(latents, prompt_embeds)
+            upscaler.single_forward(latents, prompt_embeds)
         torch.cuda.synchronize()
 
         latencies_ms: list[float] = []
         for _ in tqdm(range(benchmark_iterations), desc=f"Latency {resolution}", leave=False):
             start_time = time.perf_counter()
-            upscaler.upscale(latents, prompt_embeds)
+            upscaler.single_forward(latents, prompt_embeds)
             torch.cuda.synchronize()
             latencies_ms.append((time.perf_counter() - start_time) * 1000)
 
@@ -106,7 +107,7 @@ def measure_latency(
             record_shapes=True,
             with_stack=True,
         ) as profiler:
-            upscaler.upscale(latents, prompt_embeds)
+            upscaler.single_forward(latents, prompt_embeds)
             torch.cuda.synchronize()
 
     _save_time_profile_artifacts(profiler, profile_directory)

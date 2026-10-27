@@ -33,8 +33,9 @@ Each invocation provides the persistent research state and results from the late
 - File naming is based on ID: `run_0001.py`, `run_0002.py`...
 - Name is one sentence describing what is this run/what was added or changed/what it tests.
 - Run `run_0000.py` is the reference baseline. New run IDs continue from the highest existing ID.
-- Baseline is not arbitrary. It is the best solution found manually. But search space was relatively small.
+- Baseline is the "best guess" before any experiments: a standard attention-free convolutional UNet with multi-step flow matching (logit-normal shifted timesteps, 20-step Euler sampling), channel-concat conditioning on the low resolution latents, independent Gaussian noise, AdamW with warmup and gradient clipping, no EMA. It makes minimal assumptions about the dataset. It is a reference to compare against, not a tuned optimum.
 - Each file should contain a single implementation of `./src/stdev/upscalers/base.py` interface. This is the API of solution, infrastructure would call it's methods.
+- `single_forward` must run the model exactly once with dummy internal inputs, it is used only for the latency benchmark. Keep it consistent with the model call inside `upscale`.
 - Runs can use dataset DATASET at `./train_datasets/`. See how dataset is generated at `./scripts/generate_flux_dataset.py`
 - Run should checkpoint it's weights to `./trained_models/run_<ID>/`. You define what to save there.
 - Run should write the training loss to a tensorboard record in `./tensorboard/run_<ID>/` (scalar `train/loss`). Smoke runs must not create the record.
@@ -60,6 +61,10 @@ These are experiments that **do not require training**.
 This includes debugging, micro-optimization tests, inference tweaks.
 You can do these experiments **between rounds** while you are thinking on the next training run.
 Keep all files related to small experiments in `./dev`
+
+Small experiments are especially useful when you want to get more data from less training runs. 
+For example, save intermediate checkpoints or some statistics during training and then inspect it between runs.
+Make inference experiments and small benchmarks. 
 
 6. Knowledge accumulation
 
@@ -109,7 +114,7 @@ There is no simple goal here: you are jointly optimizing a set of objectives.
 They can approximately be ordered by the priority:
 
 1. Benchmark quality metrics. FID (lower is better): `quality.axis_1024.fid` (real photos, the upscaled images against the real images) and `quality.flux_1024.fid` (teacher-generated images, the upscaled images against the teacher images). Each dataset is evaluated on its own images. Differences below ~0.5 FID are treated as noise (single seed) until measured.
-2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized)
+2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized). Latency is the latency of a **single model forward pass** (`Upscaler.single_forward`), not of the whole sampling loop. Minimize it. Reducing the number of sampling steps is not a latency gain here, low-step distillation is out of scope.
 3. Training loss (for equivalent loss and data setups, for architecture design only)
 4. Implementation simplicity (as a term of regularization)
 
@@ -121,7 +126,7 @@ Simplicity criterion: All else being equal, simpler is better. A small improveme
 1. Read the benchmark results of previous round.
 
 Benchmark results are in `./raw_results/run_<run_ID>/metrics.json`
-Profiling results are in `./raw_results/run_<run_ID>/profiles/<resolution>/`: CPU and CUDA time of the compiled model, and the memory timeline of the not compiled model (the profiler cannot attribute memory of compiled graphs).
+Profiling results are in `./raw_results/run_<run_ID>/profiles/<resolution>/`: CPU and CUDA time of a single forward pass of the compiled model, and the memory timeline of the not compiled model (the profiler cannot attribute memory of compiled graphs).
 Upscaled samples are in `./raw_results/run_<run_ID>/images_<dataset_name>/`
 
 2. Read `./autoresearch/experiment_logs.md` if you havn't the full context of previous round.
@@ -130,7 +135,7 @@ Upscaled samples are in `./raw_results/run_<run_ID>/images_<dataset_name>/`
 
 4. Update `./autoresearch/experiment_logs.md`.
 
-Units in `metrics.json`: latency in ms (compiled model), `cuda_mem_*` in MB (not compiled model, weights included).
+Units in `metrics.json`: latency in ms (single forward pass of the compiled model), `cuda_mem_*` in MB (full `upscale` of the not compiled model, weights included).
 
 5. Check run (fits in VRAM, no errors) by calling runner with a list of run IDs. Smoke passes if training and benchmark both exit 0 for every run, e.g.
 
@@ -153,7 +158,9 @@ A few things that you should not use in any solution. Everything else that is no
 1. **O(n^2) and larger compute complexity where n is image area.** It means that full sequence attention on image tokens is not allowed even in downsampled blocks.
 The reason is that upscaler's architecture should handle up to 8K upscaling, n^2 attention would explode. Factorized, sparce attention or full attention on O(1) fixed token block is allowed.
 
-2. **Model size > 1B parameters** even if it fits in VRAM. Meanwhile there is no limitation "less parameters -> better". You can go very close to 1B if VRAM can handle this.
+2. **More than 30 inference steps** (model calls per `upscale`), to prevent trading latency for negligible FID gains.
+
+3. **Model size > 1B parameters** even if it fits in VRAM. Meanwhile there is no limitation "less parameters -> better". You can go very close to 1B if VRAM can handle this.
 
 ## Suggested Seed Solutions
 
@@ -168,6 +175,10 @@ It doesn't mean you must try each of them. But if you stuck in some local minimu
 | **Linear Attention (Performer)** | Use FAVOR+ random feature maps: approximate softmax with positive random features (e.g. orthogonal random projections). Compute $Q\varphi(K)^T$ in linear time. | Achieves provably linear $O(n)$ attention, scaling efficiently to large images. |
 | **Low-Rank Attention (Linformer)** | Project the $n\times n$ attention to $n\times k$ via learned linear layers, so each query attends only to a fixed small basis of keys. | Attention becomes $O(nk)$ ($k\ll n$), reducing compute while retaining performance. |
 | **Sparse/Windowed Attention (BigBird/Longformer/Swin)** | Restrict each token to attend only to nearby tokens or a sparse global set.  E.g. BigBird uses random “small-world” sparse graph; Swin uses non-overlapping local windows plus shifts. | Yields linear-time attention with local context; Swin’s hierarchical windows also capture multi-scale structure. |
+| **Separate LR encoder + adaLN-Zero modulation** | Replace the baseline channel concat of the low resolution latents with a separate low resolution encoder whose multi-scale features modulate the UNet through FiLM / adaLN-Zero (scale, shift and gate initialized to zero). The previous baseline used FiLM without the gate. | Keeps the low resolution signal from being diluted in the input conv and injects it at every scale. |
+| **Coupled noise** | Use the teacher's `init_latents` as the noise paired with `latents_orig` instead of independent Gaussian noise (the baseline samples independent noise). | The noise to image mapping becomes nearly deterministic, which can help few-step and one-step sampling. |
+| **EMA of weights** | Keep an exponential moving average of the weights and use it for inference. The decay must fit the short run, so use a ramp such as `min(0.9999, (1+n)/(10+n))` rather than a fixed 0.9999. | Smoother weights, usually better FID at no inference cost. Not in the baseline yet. |
+| **Cosine velocity loss** | Add a cosine similarity term on the predicted velocity direction (from LightningDiT) next to the MSE. | At high noise MSE is dominated by magnitude while direction determines the image. |
 | **Attention-Free Key–Value** | Tie or omit the query-key softmax: link keys directly to values (no softmax) to implement linear mapping. Essentially $ \text{Attention}(Q,K,V)\approx Q(K^TV)$. | Removes the $O(n^2)$ softmax, giving a *linear* Transformer variant that still leverages content mixing. |
 
 
