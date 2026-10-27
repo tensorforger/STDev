@@ -8,7 +8,7 @@ REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPOSITORY_ROOT"
 
 PYTHON="${PYTHON:-$REPOSITORY_ROOT/.venv/bin/python}"
-BENCHMARK_DATASET="benchmark_datasets/axis_1024"
+BENCHMARK_DATASETS=("benchmark_datasets/axis_1024" "benchmark_datasets/flux_1024")
 TRAINING_TIME_LIMIT="35m"
 KILL_GRACE_PERIOD="60s"
 
@@ -76,7 +76,7 @@ for run_id in "${run_ids[@]}"; do
 
     echo "=== ${run_name}: benchmark ==="
     "$PYTHON" -u scripts/run_benchmark.py \
-        --dataset "$BENCHMARK_DATASET" --upscaler "$run_file" "${smoke_arguments[@]}" \
+        --datasets "${BENCHMARK_DATASETS[@]}" --upscaler "$run_file" "${smoke_arguments[@]}" \
         2>&1 | log_output "${log_directory}/benchmark.log"
     benchmark_status=${PIPESTATUS[0]}
 

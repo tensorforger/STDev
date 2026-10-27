@@ -42,16 +42,35 @@ def _save_memory_timeline_image(profiler: torch.profiler.profile, image_path: Pa
     html_path.unlink()
 
 
-def _save_profile_artifacts(profiler: torch.profiler.profile, profile_directory: Path) -> None:
+def _save_time_profile_artifacts(profiler: torch.profiler.profile, profile_directory: Path) -> None:
     profile_directory.mkdir(parents=True, exist_ok=True)
     profiler.export_chrome_trace(str(profile_directory / "trace.json"))
     for sort_key in ("self_cpu_time_total", "self_cuda_time_total"):
         table = profiler.key_averages().table(sort_by=sort_key, row_limit=PROFILE_TABLE_ROW_LIMIT)
         (profile_directory / f"table_{sort_key}.txt").write_text(table)
-    _save_memory_timeline_image(profiler, profile_directory / "memory_timeline.png")
 
 
-def measure_efficiency(
+def _make_random_latents(
+    latent_channels: int, latent_size: int, scale_factor: int, dtype: torch.dtype, seed: int
+) -> torch.Tensor:
+    """
+    returns:
+        latents: [1, C, H_lr, W_lr], low resolution matching the output of `latent_size`
+    """
+    low_resolution_size = latent_size // scale_factor
+    generator = torch.Generator(device="cuda").manual_seed(seed)
+    return torch.randn(
+        1,
+        latent_channels,
+        low_resolution_size,
+        low_resolution_size,
+        generator=generator,
+        device="cuda",
+        dtype=dtype,
+    )
+
+
+def measure_latency(
     upscaler: Upscaler,
     resolution: int,
     latent_channels: int,
@@ -65,20 +84,10 @@ def measure_efficiency(
     seed: int,
 ) -> dict[str, float]:
     """
-    Measures latency over timed passes, then CUDA memory over one extra profiled pass.
+    Measures latency over timed passes, then saves the CPU and CUDA time profile of one extra pass.
     The upscaler input is random latents of the low resolution matching the output `resolution`.
     """
-    low_resolution_size = latent_size // scale_factor
-    generator = torch.Generator(device="cuda").manual_seed(seed)
-    latents = torch.randn(
-        1,
-        latent_channels,
-        low_resolution_size,
-        low_resolution_size,
-        generator=generator,
-        device="cuda",
-        dtype=dtype,
-    )  # [1, C, H_lr, W_lr]
+    latents = _make_random_latents(latent_channels, latent_size, scale_factor, dtype, seed)
 
     with torch.no_grad():
         for _ in tqdm(range(warmup_iterations), desc=f"Warmup {resolution}", leave=False):
@@ -94,6 +103,45 @@ def measure_efficiency(
 
         with torch.profiler.profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            record_shapes=True,
+            with_stack=True,
+        ) as profiler:
+            upscaler.upscale(latents, prompt_embeds)
+            torch.cuda.synchronize()
+
+    _save_time_profile_artifacts(profiler, profile_directory)
+    return {
+        f"latency_ms_avg_{resolution}": float(np.mean(latencies_ms)),
+        f"latency_ms_peak_{resolution}": float(np.max(latencies_ms)),
+    }
+
+
+def measure_memory(
+    upscaler: Upscaler,
+    resolution: int,
+    latent_channels: int,
+    latent_size: int,
+    scale_factor: int,
+    dtype: torch.dtype,
+    prompt_embeds: torch.Tensor,
+    warmup_iterations: int,
+    profile_directory: Path,
+    seed: int,
+) -> dict[str, float]:
+    """
+    Measures allocated CUDA memory over one profiled pass, including the model weights.
+    Must be called on the not compiled upscaler: the profiler cannot attribute memory of compiled
+    graphs, which leaves the memory timeline without categories and the weights uncounted.
+    """
+    latents = _make_random_latents(latent_channels, latent_size, scale_factor, dtype, seed)
+
+    with torch.no_grad():
+        for _ in range(warmup_iterations):
+            upscaler.upscale(latents, prompt_embeds)
+        torch.cuda.synchronize()
+
+        with torch.profiler.profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             profile_memory=True,
             record_shapes=True,
             with_stack=True,
@@ -101,12 +149,11 @@ def measure_efficiency(
             upscaler.upscale(latents, prompt_embeds)
             torch.cuda.synchronize()
 
-    _save_profile_artifacts(profiler, profile_directory)
+    profile_directory.mkdir(parents=True, exist_ok=True)
+    _save_memory_timeline_image(profiler, profile_directory / "memory_timeline.png")
     peak_memory_mb, average_memory_mb = _extract_memory_statistics(profiler)
 
     return {
-        f"latency_ms_avg_{resolution}": float(np.mean(latencies_ms)),
-        f"latency_ms_peak_{resolution}": float(np.max(latencies_ms)),
         f"cuda_mem_avg_{resolution}": average_memory_mb,
         f"cuda_mem_peak_{resolution}": peak_memory_mb,
     }

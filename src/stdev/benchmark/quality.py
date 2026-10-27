@@ -48,23 +48,16 @@ def populate_latent_cache(
 
 def build_fid_evaluator(
     dataset: BenchmarkDataset,
-    teacher_dataset: BenchmarkDataset,
     cache: LatentCache,
     image_size: int,
 ) -> FIDEvaluator:
     return FIDEvaluator(
         references=[
             FIDReference(
-                name="real",
+                name="fid",
                 image_dir=str(dataset.images_directory),
-                stats_path=str(cache.fid_statistics_paths["real"]),
+                stats_path=str(cache.fid_statistics_path),
                 file_names=dataset.get_image_file_names(),
-            ),
-            FIDReference(
-                name="teacher",
-                image_dir=str(teacher_dataset.images_directory),
-                stats_path=str(cache.fid_statistics_paths["teacher"]),
-                file_names=teacher_dataset.get_image_file_names(),
             ),
         ],
         image_size=image_size,
@@ -136,5 +129,5 @@ def evaluate_quality(
             _save_image(image_hr_pred, images_directory / f"{sample_name}_out.png")
 
     quality = {name: float(np.mean(values)) for name, values in metric_values.items()}
-    quality.update({f"fid_{name}": value for name, value in fid_evaluator.compute().items()})
+    quality.update(fid_evaluator.compute())
     return quality

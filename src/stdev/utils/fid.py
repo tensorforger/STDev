@@ -113,6 +113,7 @@ class FIDEvaluator:
         for reference_name, state in self.real_statistics.items():
             for name in REAL_STATE_NAMES:
                 setattr(self.metric, name, state[name].clone())
+            self.metric._computed = None
             fids[reference_name] = self.metric.compute().item()
         self.metric.reset()
         return fids

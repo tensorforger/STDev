@@ -10,17 +10,13 @@ LATENT_KINDS = ("lr_gt", "hr_gt")
 
 class LatentCache:
     """
-    Per-sample ground truth latents compressed with vaezip and FID statistics of the real and
-    teacher images.
+    Per-sample ground truth latents compressed with vaezip and FID statistics of the dataset images.
     """
 
     def __init__(self, cache_directory: Path, metadata: dict[str, Any], codec: str) -> None:
         self.cache_directory = cache_directory
         self.codec = codec
-        self.fid_statistics_paths = {
-            "real": cache_directory / "fid_real_stats.pt",
-            "teacher": cache_directory / "fid_teacher_stats.pt",
-        }
+        self.fid_statistics_path = cache_directory / "fid_stats.pt"
         cache_directory.mkdir(parents=True, exist_ok=True)
         for kind in LATENT_KINDS:
             (cache_directory / f"latents_{kind}").mkdir(exist_ok=True)

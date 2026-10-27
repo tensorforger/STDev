@@ -5,8 +5,8 @@
 - Number of runs per round **N=1**
 - GPU memory available to a run **VRAM_LIMIT=32** GB (one RTX 5090). A run may use the entire GPU.
 - Runs of a round are currently executed **sequentially** on a single GPU by `start_round.sh`
-- Dataset should be used for model training is **DATASET=`./train_datasets/flux_1024_5k`**
-- This dataset contains 5000 blocks `block_<index>.vz.safetensors` (vaezip format, load with `vaezip.load`, `.decode(dtype=...)`). Each block is one teacher (FLUX.2-klein-4B, 4 steps, 1024x1024) generation with a single sample per tensor:
+- Dataset should be used for model training is **DATASET=`./train_datasets/flux_1024_1k`**
+- This dataset contains 1000 blocks `block_<index>.vz.safetensors` (vaezip format, load with `vaezip.load`, `.decode(dtype=...)`). Each block is one teacher (FLUX.2-klein-4B, 4 steps, 1024x1024) generation with a single sample per tensor:
 
 | Key                | Shape (1024 px image)  | Codec        | Purpose                                                                                           |
 |--------------------|------------------------|--------------|---------------------------------------------------------------------------------------------------|
@@ -37,6 +37,7 @@ Each invocation provides the persistent research state and results from the late
 - Each file should contain a single implementation of `./src/stdev/upscalers/base.py` interface. This is the API of solution, infrastructure would call it's methods.
 - Runs can use dataset DATASET at `./train_datasets/`. See how dataset is generated at `./scripts/generate_flux_dataset.py`
 - Run should checkpoint it's weights to `./trained_models/run_<ID>/`. You define what to save there.
+- Run should write the training loss to a tensorboard record in `./tensorboard/run_<ID>/` (scalar `train/loss`). Smoke runs must not create the record.
 - Run script would exit. Benchmark script would load the model again. So implementation should support weight loading and not assume it would benchmarked in same process with training.
 
 
@@ -107,7 +108,7 @@ There is no simple goal here: you are jointly optimizing a set of objectives.
 
 They can approximately be ordered by the priority:
 
-1. Benchmark quality metrics. FID (lower is better): `fid_real` (against real images) and `fid_teacher` (against teacher-generated images). Differences below ~0.5 FID are treated as noise (single seed) until measured.
+1. Benchmark quality metrics. FID (lower is better): `quality.axis_1024.fid` (real photos, the upscaled images against the real images) and `quality.flux_1024.fid` (teacher-generated images, the upscaled images against the teacher images). Each dataset is evaluated on its own images. Differences below ~0.5 FID are treated as noise (single seed) until measured.
 2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized)
 3. Training loss (for equivalent loss and data setups, for architecture design only)
 4. Implementation simplicity (as a term of regularization)
@@ -119,8 +120,9 @@ Simplicity criterion: All else being equal, simpler is better. A small improveme
 
 1. Read the benchmark results of previous round.
 
-Benchmark results are in `./raw_results/<dataset_name>/run_<run_ID>/metrics.json`
-Profiling results (CPU and CUDA time) is in `./raw_results/<dataset_name>/run_<run_ID>/profiles/<resolution>/`
+Benchmark results are in `./raw_results/run_<run_ID>/metrics.json`
+Profiling results are in `./raw_results/run_<run_ID>/profiles/<resolution>/`: CPU and CUDA time of the compiled model, and the memory timeline of the not compiled model (the profiler cannot attribute memory of compiled graphs).
+Upscaled samples are in `./raw_results/run_<run_ID>/images_<dataset_name>/`
 
 2. Read `./autoresearch/experiment_logs.md` if you havn't the full context of previous round.
 
@@ -128,7 +130,7 @@ Profiling results (CPU and CUDA time) is in `./raw_results/<dataset_name>/run_<r
 
 4. Update `./autoresearch/experiment_logs.md`.
 
-Units in `metrics.json`: latency in ms, `cuda_mem_*` in MB.
+Units in `metrics.json`: latency in ms (compiled model), `cuda_mem_*` in MB (not compiled model, weights included).
 
 5. Check run (fits in VRAM, no errors) by calling runner with a list of run IDs. Smoke passes if training and benchmark both exit 0 for every run, e.g.
 
@@ -156,6 +158,18 @@ The reason is that upscaler's architecture should handle up to 8K upscaling, n^2
 ## Suggested Seed Solutions
 
 It doesn't mean you must try each of them. But if you stuck in some local minimum or want to try something else, you can pull options from here.
+
+| **Direction / Idea** | **Implementation (recipe)** | **Benefit / Outcome** |
+|---|---|---|
+| **Text-Conditioning (Cross-Attention)** | Incorporate language embeddings as an additional input (like stable diffusion does).  Use cross-attention or FiLM layers to condition on text tokens. Text embeds of SDXL encoder is already in dataset. | Allows guided upscaling (global style conditioning), and may improve semantic consistency.  |
+| **Internal Activation Distillation** | During training, have the student mimic one or more layers of a teacher model (via $L_2$ or cosine similarity on feature maps).  For example, insert 1×1 conv on student features to match teacher’s. Generator's activations are already in dataset. | Forces student to develop similar internal representations, often improving convergence and final accuracy. |
+| **Sample-Stream Control-Stream Architecture** | Add a learned fixed token sequence to Unet as a "Control Stream". It gatehrs data from Unet activations (e.g. with cross attention) and distributes it back (e.g. with also cross attention). Control stream can use n^2 self attention internally. | Decouples global reasoning and local denoising. No n^2 on image area and global context. |
+| **LSH Attention (Reformer)** | Replace full softmax with locality-sensitive hashing to group keys/queries, reducing attention from $O(n^2)$ to $O(n\log n)$. | Greatly reduces memory/compute on large images, enabling very high resolution. |
+| **Linear Attention (Performer)** | Use FAVOR+ random feature maps: approximate softmax with positive random features (e.g. orthogonal random projections). Compute $Q\varphi(K)^T$ in linear time. | Achieves provably linear $O(n)$ attention, scaling efficiently to large images. |
+| **Low-Rank Attention (Linformer)** | Project the $n\times n$ attention to $n\times k$ via learned linear layers, so each query attends only to a fixed small basis of keys. | Attention becomes $O(nk)$ ($k\ll n$), reducing compute while retaining performance. |
+| **Sparse/Windowed Attention (BigBird/Longformer/Swin)** | Restrict each token to attend only to nearby tokens or a sparse global set.  E.g. BigBird uses random “small-world” sparse graph; Swin uses non-overlapping local windows plus shifts. | Yields linear-time attention with local context; Swin’s hierarchical windows also capture multi-scale structure. |
+| **Attention-Free Key–Value** | Tie or omit the query-key softmax: link keys directly to values (no softmax) to implement linear mapping. Essentially $ \text{Attention}(Q,K,V)\approx Q(K^TV)$. | Removes the $O(n^2)$ softmax, giving a *linear* Transformer variant that still leverages content mixing. |
+
 
 
 
