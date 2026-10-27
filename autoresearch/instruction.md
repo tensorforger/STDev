@@ -2,7 +2,7 @@
 
 ## Research hyperparamters
 
-- Number of runs per round **N=2**
+- Number of runs per round **N=1**
 - Dataset should be used for model training **DATASET=`./train_datasets/flux_1024_5k`**
 - GPU memory available to a run **VRAM_LIMIT=32** GB (one RTX 5090). A run may use the entire GPU.
 - Runs of a round are currently executed **sequentially** on a single GPU by `start_round.sh` (a round takes about N x 35 min). Later, runs will be parallel across a multi-GPU machine.

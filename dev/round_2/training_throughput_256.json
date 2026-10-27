@@ -1,0 +1,13 @@
+[
+  {
+    "base_channels": 256,
+    "batch_size": 16,
+    "bfloat16": true,
+    "compile": true,
+    "parameters": 89390880,
+    "milliseconds_per_step": 131.29204510005366,
+    "samples_per_second": 121.86572299796906,
+    "peak_memory_gb": 5.1750030517578125,
+    "loss": 2.000028371810913
+  }
+]
