@@ -24,11 +24,7 @@ dependencies = [
     "omegaconf",
     "vaezip",
     "ipywidgets",
-    "rqi",
 ]
-
-[tool.uv.sources]
-rqi = { path = "rqi", editable = true }
 
 [project.optional-dependencies]
 dev = [

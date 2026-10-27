@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 import cv2
 import torch
@@ -39,34 +40,47 @@ class RealImageDataset(Dataset):
         return torch.from_numpy(image).permute(2, 0, 1)
 
 
+@dataclass
+class FIDReference:
+    name: str
+    image_dir: str
+    stats_path: str
+    file_names: list[str] | None = None
+
+
 class FIDEvaluator:
     """
-    FID against the statistics of real images.
-    Real statistics are computed once and cached at stats_path, so all runs share them.
+    FID against the statistics of several reference image sets.
+    Reference statistics are computed once and cached at stats_path, so all runs share them.
     """
 
     def __init__(
         self,
-        real_image_dir: str,
-        stats_path: str,
+        references: list[FIDReference],
         image_size: int = 256,
         device: str = "cuda",
         batch_size: int = 256,
         num_workers: int = 8,
-        file_names: list[str] | None = None,
     ):
         self.device = device
         self.metric = FrechetInceptionDistance(feature=2048, reset_real_features=False).to(device)
+        self.real_statistics: dict[str, dict[str, torch.Tensor]] = {}
 
-        if os.path.exists(stats_path):
-            self._load_real_statistics(stats_path)
-        else:
-            self._compute_real_statistics(
-                RealImageDataset(real_image_dir, image_size, file_names),
-                batch_size,
-                num_workers,
-            )
-            self._save_real_statistics(stats_path)
+        for reference in references:
+            for name in REAL_STATE_NAMES:
+                getattr(self.metric, name).zero_()
+            if os.path.exists(reference.stats_path):
+                self._load_real_statistics(reference.stats_path)
+            else:
+                self._compute_real_statistics(
+                    RealImageDataset(reference.image_dir, image_size, reference.file_names),
+                    batch_size,
+                    num_workers,
+                )
+                self._save_real_statistics(reference.stats_path)
+            self.real_statistics[reference.name] = {
+                name: getattr(self.metric, name).clone() for name in REAL_STATE_NAMES
+            }
 
     def _compute_real_statistics(self, dataset, batch_size, num_workers):
         loader = DataLoader(
@@ -93,8 +107,12 @@ class FIDEvaluator:
         images = images.clamp(0, 1).mul(255).round().to(torch.uint8)
         self.metric.update(images, real=False)
 
-    def compute(self) -> float:
-        """Returns FID of all images passed to update() and clears them."""
-        fid = self.metric.compute().item()
+    def compute(self) -> dict[str, float]:
+        """Returns FID per reference name of all images passed to update() and clears them."""
+        fids: dict[str, float] = {}
+        for reference_name, state in self.real_statistics.items():
+            for name in REAL_STATE_NAMES:
+                setattr(self.metric, name, state[name].clone())
+            fids[reference_name] = self.metric.compute().item()
         self.metric.reset()
-        return fid
+        return fids

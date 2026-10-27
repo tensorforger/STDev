@@ -256,8 +256,7 @@ class Run0000Upscaler(Upscaler):
         parameter_count = sum(parameter.numel() for parameter in model.parameters())
         print(f"{RUN_NAME}: {parameter_count / 1e6:.2f}M parameters", flush=True)
 
-        run_log_name = f"{RUN_NAME}_smoke" if smoke_mode else RUN_NAME
-        summary_writer = SummaryWriter(str(TENSORBOARD_DIRECTORY / run_log_name))
+        summary_writer = None if smoke_mode else SummaryWriter(str(TENSORBOARD_DIRECTORY / RUN_NAME))
         batches = iterate_batches(data_loader)
         latents_full, latents_div_2 = next(batches)
         training_start_time = time.perf_counter()
@@ -293,7 +292,8 @@ class Run0000Upscaler(Upscaler):
                 print(
                     f"step {step} loss {mean_loss:.4f} elapsed {elapsed_seconds:.0f}s", flush=True
                 )
-                summary_writer.add_scalar("train/loss", mean_loss, step)
+                if summary_writer is not None:
+                    summary_writer.add_scalar("train/loss", mean_loss, step)
                 loss_sum.zero_()
 
             if smoke_mode:
@@ -304,7 +304,8 @@ class Run0000Upscaler(Upscaler):
                 break
             latents_full, latents_div_2 = next(batches)
 
-        summary_writer.close()
+        if summary_writer is not None:
+            summary_writer.close()
         OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
         save_file(model.state_dict(), str(OUTPUT_DIRECTORY / MODEL_FILE_NAME))
         save_file(ema_model.state_dict(), str(OUTPUT_DIRECTORY / EMA_MODEL_FILE_NAME))
@@ -319,11 +320,11 @@ class Run0000Upscaler(Upscaler):
         self.model = torch.compile(self.model)
 
     @torch.no_grad()
-    def upscale(self, tensor: torch.Tensor, prompt: str) -> torch.Tensor:
+    def upscale(self, tensor: torch.Tensor, prompt_embeds: torch.Tensor) -> torch.Tensor:
         """
         args:
             tensor: [B, C, H_lr, W_lr], dtype = float32 (or float16, bfloat16), device = "cuda"
-            prompt: text description of the image, unused
+            prompt_embeds: [B, 77, 768], dtype = float32, SDXL text encoder embeddings, unused
         returns:
             tensor: [B, C, H_lr * SCALE_FACTOR, W_lr * SCALE_FACTOR], same dtype as the input
         """

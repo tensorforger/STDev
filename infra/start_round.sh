@@ -14,11 +14,11 @@ KILL_GRACE_PERIOD="60s"
 
 run_ids=()
 smoke_arguments=()
-log_suffix=""
+is_smoke=0
 for argument in "$@"; do
     if [[ "$argument" == "--smoke" ]]; then
         smoke_arguments=(--smoke)
-        log_suffix="_smoke"
+        is_smoke=1
     elif [[ "$argument" =~ ^[0-9]{4}$ ]]; then
         run_ids+=("$argument")
     else
@@ -43,16 +43,25 @@ done
 summary=()
 round_failed=0
 
+# Usage: log_output LOG_PATH; passes stdin through, saving it to LOG_PATH unless in smoke mode.
+log_output() {
+    if [[ $is_smoke -eq 1 ]]; then
+        cat
+    else
+        tee "$1"
+    fi
+}
+
 for run_id in "${run_ids[@]}"; do
     run_name="run_${run_id}"
     run_file="src/stdev/upscalers/${run_name}.py"
     log_directory="train_logs/${run_name}"
-    mkdir -p "$log_directory"
+    [[ $is_smoke -eq 0 ]] && mkdir -p "$log_directory"
 
     echo "=== ${run_name}: training ==="
     timeout --kill-after="$KILL_GRACE_PERIOD" "$TRAINING_TIME_LIMIT" \
         "$PYTHON" -u infra/run_training.py "$run_id" "${smoke_arguments[@]}" \
-        2>&1 | tee "${log_directory}/train${log_suffix}.log"
+        2>&1 | log_output "${log_directory}/train.log"
     training_status=${PIPESTATUS[0]}
 
     if [[ $training_status -ne 0 ]]; then
@@ -68,7 +77,7 @@ for run_id in "${run_ids[@]}"; do
     echo "=== ${run_name}: benchmark ==="
     "$PYTHON" -u scripts/run_benchmark.py \
         --dataset "$BENCHMARK_DATASET" --upscaler "$run_file" "${smoke_arguments[@]}" \
-        2>&1 | tee "${log_directory}/benchmark${log_suffix}.log"
+        2>&1 | log_output "${log_directory}/benchmark.log"
     benchmark_status=${PIPESTATUS[0]}
 
     if [[ $benchmark_status -ne 0 ]]; then

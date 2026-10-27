@@ -1,6 +1,8 @@
 import argparse
 import json
 import shutil
+import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 
 import torch
@@ -28,31 +30,47 @@ SMOKE_ITERATIONS = 2
 SMOKE_NUM_SAMPLES = 2
 NUM_SAVED_SAMPLES = 8
 LATENT_CODEC = "lbrq_8bit"
-DUMMY_PROMPT = "A photo of an object."
+PROMPT_EMBEDS_SHAPE = (1, 77, 768)
 SEED = 0
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, required=True)
+    parser.add_argument(
+        "--teacher-dataset", type=Path, default=REPOSITORY_ROOT / "benchmark_datasets" / "flux_1024"
+    )
     parser.add_argument("--upscaler", type=Path, required=True)
     parser.add_argument("--smoke", action="store_true")
     return parser.parse_args()
 
 
 def main() -> None:
+    with ExitStack() as exit_stack:
+        run_benchmark(exit_stack)
+
+
+def run_benchmark(exit_stack: ExitStack) -> None:
     arguments = parse_arguments()
     smoke = arguments.smoke
     dataset_name = arguments.dataset.name
     run_name = f"{dataset_name}_smoke" if smoke else dataset_name
 
     dataset = BenchmarkDataset(arguments.dataset, max_samples=SMOKE_NUM_SAMPLES if smoke else None)
+    teacher_dataset = BenchmarkDataset(
+        arguments.teacher_dataset, max_samples=SMOKE_NUM_SAMPLES if smoke else None
+    )
     upscaler = load_upscaler(arguments.upscaler)
     vae = Flux2VAE(str(VAE_PATH), device="cuda", dtype=VAE_DTYPE)
     image_size = dataset.load_image(dataset.sample_names[0]).shape[-1]
 
     results_directory = RAW_RESULTS_DIRECTORY / run_name / upscaler.get_name()
-    if results_directory.exists():
+    cache_directory = BENCHMARK_CACHE_DIRECTORY / run_name
+    if smoke:
+        temporary_directory = Path(exit_stack.enter_context(tempfile.TemporaryDirectory()))
+        results_directory = temporary_directory / "results"
+        cache_directory = temporary_directory / "cache"
+    elif results_directory.exists():
         shutil.rmtree(results_directory)
     results_directory.mkdir(parents=True)
 
@@ -72,7 +90,7 @@ def main() -> None:
                 latent_size=resolution // vae.get_spatial_compression(),
                 scale_factor=SCALE_FACTOR,
                 dtype=UPSCALER_DTYPE,
-                prompt=DUMMY_PROMPT,
+                prompt_embeds=torch.zeros(PROMPT_EMBEDS_SHAPE, device="cuda"),
                 warmup_iterations=0 if smoke else WARMUP_ITERATIONS,
                 benchmark_iterations=SMOKE_ITERATIONS if smoke else BENCHMARK_ITERATIONS,
                 profile_directory=results_directory / "profiles" / str(resolution),
@@ -81,7 +99,7 @@ def main() -> None:
         )
 
     cache = LatentCache(
-        BENCHMARK_CACHE_DIRECTORY / run_name,
+        cache_directory,
         metadata={
             "vae": vae.get_vae_name(),
             "vae_dtype": str(VAE_DTYPE),
@@ -93,7 +111,7 @@ def main() -> None:
         codec=LATENT_CODEC,
     )
     populate_latent_cache(dataset, vae, cache, SCALE_FACTOR, SEED)
-    fid_evaluator = build_fid_evaluator(dataset, cache, image_size)
+    fid_evaluator = build_fid_evaluator(dataset, teacher_dataset, cache, image_size)
 
     if not smoke:
         torch._dynamo.reset()
@@ -114,7 +132,8 @@ def main() -> None:
         "efficiency": efficiency,
         "quality": quality,
     }
-    (results_directory / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    if not smoke:
+        (results_directory / "metrics.json").write_text(json.dumps(metrics, indent=2))
     print(json.dumps(metrics, indent=2))
 
 

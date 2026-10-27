@@ -30,11 +30,11 @@ class Upscaler(ABC):
         """
 
     @abstractmethod
-    def upscale(self, tensor: torch.Tensor, prompt: str) -> torch.Tensor:
+    def upscale(self, tensor: torch.Tensor, prompt_embeds: torch.Tensor) -> torch.Tensor:
         """
         args:
             tensor: [B, C, H_lr, W_lr], dtype = float32 (or float16, bfloat16), device = "cuda"
-            prompt: text description of the image
+            prompt_embeds: [B, 77, 768], dtype = float32, SDXL text encoder embeddings
         returns:
             tensor: [B, C, H_hr, W_hr]
         """

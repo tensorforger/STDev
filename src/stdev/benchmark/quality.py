@@ -4,13 +4,12 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as functional
-from rqi import RQI
 from tqdm import tqdm
 
 from stdev.benchmark.cache import LatentCache
 from stdev.benchmark.dataset import BenchmarkDataset
 from stdev.upscalers.base import Upscaler
-from stdev.utils.fid import FIDEvaluator
+from stdev.utils.fid import FIDEvaluator, FIDReference
 from stdev.utils.image_tools import torch_to_cv2
 from stdev.vaes.image_vae import ImageVAE
 
@@ -48,14 +47,28 @@ def populate_latent_cache(
 
 
 def build_fid_evaluator(
-    dataset: BenchmarkDataset, cache: LatentCache, image_size: int
+    dataset: BenchmarkDataset,
+    teacher_dataset: BenchmarkDataset,
+    cache: LatentCache,
+    image_size: int,
 ) -> FIDEvaluator:
     return FIDEvaluator(
-        real_image_dir=str(dataset.images_directory),
-        stats_path=str(cache.fid_statistics_path),
+        references=[
+            FIDReference(
+                name="real",
+                image_dir=str(dataset.images_directory),
+                stats_path=str(cache.fid_statistics_paths["real"]),
+                file_names=dataset.get_image_file_names(),
+            ),
+            FIDReference(
+                name="teacher",
+                image_dir=str(teacher_dataset.images_directory),
+                stats_path=str(cache.fid_statistics_paths["teacher"]),
+                file_names=teacher_dataset.get_image_file_names(),
+            ),
+        ],
         image_size=image_size,
         batch_size=16,
-        file_names=dataset.get_image_file_names(),
     )
 
 
@@ -83,7 +96,6 @@ def evaluate_quality(
     Roundtrip of the ground truth through downscale, encode, upscale, decode, and the metrics.
     Saves `<sample_name>_in.png` (pixel upscaled ground truth) and `<sample_name>_out.png` pairs.
     """
-    rqi_metric = RQI()
     images_directory.mkdir(parents=True, exist_ok=True)
     saved_indices = set(
         np.linspace(0, len(dataset) - 1, min(num_saved_samples, len(dataset)))
@@ -95,7 +107,6 @@ def evaluate_quality(
         "mse_hr_image": [],
         "mse_lr_image": [],
         "mse_hr_latents": [],
-        "rqi": [],
     }
 
     for index, sample_name in enumerate(tqdm(dataset.sample_names, desc="Quality")):
@@ -105,7 +116,7 @@ def evaluate_quality(
         latents_hr_gt = cache.load_latents("hr_gt", sample_name)
 
         latents_hr_pred = upscaler.upscale(
-            latents_lr_gt.to(upscaler_dtype), dataset.load_prompt(sample_name)
+            latents_lr_gt.to(upscaler_dtype), dataset.load_prompt_embeds(sample_name)
         ).float()
         image_hr_pred = vae.decode(latents_hr_pred).float().clamp(0, 1)
         image_lr_pred = resize_bilinear(image_hr_pred, 1 / scale_factor)
@@ -115,7 +126,6 @@ def evaluate_quality(
         metric_values["mse_hr_latents"].append(
             functional.mse_loss(latents_hr_pred, latents_hr_gt).item()
         )
-        metric_values["rqi"].append(rqi_metric(image_hr_pred, image_hr_gt))
         fid_evaluator.update(image_hr_pred)
 
         if index in saved_indices:
@@ -126,5 +136,5 @@ def evaluate_quality(
             _save_image(image_hr_pred, images_directory / f"{sample_name}_out.png")
 
     quality = {name: float(np.mean(values)) for name, values in metric_values.items()}
-    quality["fid"] = fid_evaluator.compute()
+    quality.update({f"fid_{name}": value for name, value in fid_evaluator.compute().items()})
     return quality

@@ -58,7 +58,7 @@ def measure_efficiency(
     latent_size: int,
     scale_factor: int,
     dtype: torch.dtype,
-    prompt: str,
+    prompt_embeds: torch.Tensor,
     warmup_iterations: int,
     benchmark_iterations: int,
     profile_directory: Path,
@@ -82,13 +82,13 @@ def measure_efficiency(
 
     with torch.no_grad():
         for _ in tqdm(range(warmup_iterations), desc=f"Warmup {resolution}", leave=False):
-            upscaler.upscale(latents, prompt)
+            upscaler.upscale(latents, prompt_embeds)
         torch.cuda.synchronize()
 
         latencies_ms: list[float] = []
         for _ in tqdm(range(benchmark_iterations), desc=f"Latency {resolution}", leave=False):
             start_time = time.perf_counter()
-            upscaler.upscale(latents, prompt)
+            upscaler.upscale(latents, prompt_embeds)
             torch.cuda.synchronize()
             latencies_ms.append((time.perf_counter() - start_time) * 1000)
 
@@ -98,7 +98,7 @@ def measure_efficiency(
             record_shapes=True,
             with_stack=True,
         ) as profiler:
-            upscaler.upscale(latents, prompt)
+            upscaler.upscale(latents, prompt_embeds)
             torch.cuda.synchronize()
 
     _save_profile_artifacts(profiler, profile_directory)

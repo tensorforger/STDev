@@ -3,14 +3,23 @@
 ## Research hyperparamters
 
 - Number of runs per round **N=1**
-- Dataset should be used for model training **DATASET=`./train_datasets/flux_1024_5k`**
 - GPU memory available to a run **VRAM_LIMIT=32** GB (one RTX 5090). A run may use the entire GPU.
-- Runs of a round are currently executed **sequentially** on a single GPU by `start_round.sh` (a round takes about N x 35 min). Later, runs will be parallel across a multi-GPU machine.
-- Run `0000` is the reference baseline. New run IDs continue from the highest existing ID.
+- Runs of a round are currently executed **sequentially** on a single GPU by `start_round.sh`
+- Dataset should be used for model training is **DATASET=`./train_datasets/flux_1024_5k`**
+- This dataset contains 5000 blocks `block_<index>.vz.safetensors` (vaezip format, load with `vaezip.load`, `.decode(dtype=...)`). Each block is one teacher (FLUX.2-klein-4B, 4 steps, 1024x1024) generation with a single sample per tensor:
+
+| Key                | Shape (1024 px image)  | Codec        | Purpose                                                                                           |
+|--------------------|------------------------|--------------|---------------------------------------------------------------------------------------------------|
+| `latents_orig`     | [1, 32, 128, 128]      | `lbrq_8bit`  | Teacher output latents (FLUX.2 VAE, 8x compression). High resolution target of the upscaler.      |
+| `latents_div_2`    | [1, 32, 64, 64]        | `lbrq_8bit`  | Latents of the teacher image downscaled 2x (bilinear) and re-encoded. Low resolution input.       |
+| `init_latents`     | [1, 32, 128, 128]      | `lbrq_8bit`  | Initial noise of the teacher, unpatchified. Pairs with `latents_orig` (noise to image mapping).   |
+| `activations_grid` | [1, 3072, 64, 64]      | `lbrq_4bit`  | Teacher hidden states after single transformer block 15 (image tokens only) on the 64x64 grid. Can be used as a feature or distillation signal. |
+| `prompt_embeds`    | [1, 77, 768]           | `cast_fp16`  | SDXL text encoder embeddings of the full prompt (modifier + base prompt). Text conditioning.      |
+
 
 ## Role
 
-You are an autonomous research agent optimizing a generative latent upscaler model. Your goal is to discover the strongest practical solution through iterative research process.
+You are an autonomous research agent optimizing a generative latent upscaler model. Your goal is to discover the strongest practical and scalable solution through iterative research process. You are not training the final model here. You are looking for the best training reciepe that would be deployed at scale. So, you would need to go through different research direction and define best architecture, loss, what really matters and what not.
 
 Each invocation provides the persistent research state and results from the latest round of N independent training runs. 
 
@@ -18,15 +27,18 @@ Each invocation provides the persistent research state and results from the late
 
 1. Training run
 
-Each run is defined by a single complete file containing the model architecture, training procedure, inference pipeline, and all constants.
-No dependencies from the project can be used in this file.
-Runs have IDs and names. ID is 4 digits.
-File naming is based on ID: `run_0001.py`, `run_0002.py`...
-Name is one sentence describing what is this run/what was added or changed/what it tests.
-Each file should contain a single implementation of `./src/stdev/upscalers/base.py` interface. This is the API of solution, infrastructure would call it's methods.
-Runs can use dataset DATASET at `./train_datasets/`. See how dataset is generated at `./scripts/generate_flux_dataset.py`
-The run should checkpoint it's weights to `./trained_models/run_<ID>/`. Several checkpoints and artifacts can be saved, e.g. EMA weights and current weights.
-Benchmark script would load the model again. So it should also load weights if they already exist after training.
+- Each run is defined by a single complete file containing the model architecture, training procedure, inference pipeline, and all constants.
+- No dependencies from the project can be used in this file.
+- Runs have IDs and names. ID is 4 digits.
+- File naming is based on ID: `run_0001.py`, `run_0002.py`...
+- Name is one sentence describing what is this run/what was added or changed/what it tests.
+- Run `run_0000.py` is the reference baseline. New run IDs continue from the highest existing ID.
+- Baseline is not arbitrary. It is the best solution found manually. But search space was relatively small.
+- Each file should contain a single implementation of `./src/stdev/upscalers/base.py` interface. This is the API of solution, infrastructure would call it's methods.
+- Runs can use dataset DATASET at `./train_datasets/`. See how dataset is generated at `./scripts/generate_flux_dataset.py`
+- Run should checkpoint it's weights to `./trained_models/run_<ID>/`. You define what to save there.
+- Run script would exit. Benchmark script would load the model again. So implementation should support weight loading and not assume it would benchmarked in same process with training.
+
 
 2. Training round
 
@@ -95,7 +107,7 @@ There is no simple goal here: you are jointly optimizing a set of objectives.
 
 They can approximately be ordered by the priority:
 
-1. Benchmark quality metrics. FID (lower is better) is the primary and more reliable metric. RQI (higher is better) is new and experimental; use it mainly when FID is saturated. Differences below ~0.5 FID or ~0.01 RQI are treated as noise (single seed) until measured.
+1. Benchmark quality metrics. FID (lower is better): `fid_real` (against real images) and `fid_teacher` (against teacher-generated images). Differences below ~0.5 FID are treated as noise (single seed) until measured.
 2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized)
 3. Training loss (for equivalent loss and data setups, for architecture design only)
 4. Implementation simplicity (as a term of regularization)
@@ -131,6 +143,21 @@ Units in `metrics.json`: latency in ms, `cuda_mem_*` in MB.
 ```
 
 Call this line as an async background terminal command. The system notifies the agent on completion: do not poll or sleep, end the turn and wait. When the notification arrives, the iteration is finished; analyze the results as step 1 of the next iteration.
+
+## Solution Limitations
+
+A few things that you should not use in any solution. Everything else that is not stated here is allowed.
+
+1. **O(n^2) and larger compute complexity where n is image area.** It means that full sequence attention on image tokens is not allowed even in downsampled blocks.
+The reason is that upscaler's architecture should handle up to 8K upscaling, n^2 attention would explode. Factorized, sparce attention or full attention on O(1) fixed token block is allowed.
+
+2. **Model size > 1B parameters** even if it fits in VRAM. Meanwhile there is no limitation "less parameters -> better". You can go very close to 1B if VRAM can handle this.
+
+## Suggested Seed Solutions
+
+It doesn't mean you must try each of them. But if you stuck in some local minimum or want to try something else, you can pull options from here.
+
+
 
 ## Research Principles
 

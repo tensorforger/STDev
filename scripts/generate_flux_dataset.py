@@ -1,8 +1,10 @@
+import argparse
 import json
 import os
 import random
 from pathlib import Path
 
+import cv2
 import numpy as np
 import torch
 import vaezip
@@ -11,15 +13,21 @@ from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
 from tqdm import tqdm
 from transformers import Qwen2TokenizerFast, Qwen3ForCausalLM
 
-from stdev.utils.image_tools import resize_torch
+from stdev.text_encoders.sdxl_text_encoder import SDXLTextEncoder
+from stdev.utils.image_tools import resize_torch, torch_to_cv2
 from stdev.vaes.flux_2_vae import Flux2VAE
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIRECTORY = REPOSITORY_ROOT / "models" / "FLUX.2-klein-4B"
-PROMPTS_DIRECTORY = REPOSITORY_ROOT / "datasets" / "axis-v1_1k"
-OUTPUT_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_5k"
+SDXL_DIRECTORY = REPOSITORY_ROOT / "models" / "stable-diffusion-xl-base-1.0"
+BASE_PROMPTS_PATH = REPOSITORY_ROOT / "prompts" / "base_prompts.json"
+MODIFIERS_PATH = REPOSITORY_ROOT / "prompts" / "modifiers.json"
+OUTPUT_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_1k"
+BENCHMARK_DIRECTORY = REPOSITORY_ROOT / "benchmark_datasets" / "flux_1024"
 
-NUM_BLOCKS = 5000
+NUM_BLOCKS = 1000
+NUM_BENCHMARK_SAMPLES = 1000
+BENCHMARK_SEED_OFFSET = 1_000_000
 BATCH_SIZE = 1
 BASE_SEED = 0
 IMAGE_SIZE = 1024
@@ -31,43 +39,37 @@ LATENT_CHANNELS = 32
 VAE_SPATIAL_COMPRESSION = 8
 LATENT_CODEC = "lbrq_8bit"
 ACTIVATION_CODEC = "lbrq_4bit"
+PROMPT_EMBEDS_CODEC = "cast_fp16"
 DEVICE = "cuda"
 DTYPE = torch.bfloat16
-MODIFIERS = [
-    "Anime art, sharp edges, minimalism, digital art, flat textures.",
-    "Detailed realism photo. Sharp 4K textures.",
-    "Oil on canvas art. Brush strokes. Painting.",
-]
 
 
-def load_base_prompts() -> list[str]:
-    return [path.read_text() for path in sorted(PROMPTS_DIRECTORY.glob("*/*.txt"))]
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Generate the benchmark dataset instead of the training blocks.",
+    )
+    return parser.parse_args()
 
 
-def build_block_specification(block_index: int, base_prompts: list[str]) -> dict:
-    seed = BASE_SEED + block_index
+def load_prompt_sources() -> tuple[list[str], list[str]]:
+    base_prompts = json.loads(BASE_PROMPTS_PATH.read_text())
+    modifiers = json.loads(MODIFIERS_PATH.read_text())["modifiers"]
+    return base_prompts, modifiers
+
+
+def build_block_specification(seed: int, base_prompts: list[str], modifiers: list[str]) -> dict:
     random_generator = random.Random(seed)
-    modifier = random_generator.choice(MODIFIERS)
+    modifier = random_generator.choice(modifiers)
     base_prompt = random_generator.choice(base_prompts)
 
-    return {
-        "model_prompt": f"{modifier} {base_prompt}",
-        "modifier": modifier,
-        "base_prompt": base_prompt,
-        "seed": seed,
-    }
+    return {"model_prompt": f"{modifier} {base_prompt}", "seed": seed}
 
 
-def get_block_paths(block_index: int) -> tuple[Path, Path]:
-    block_name = f"block_{block_index:06d}"
-    return (
-        OUTPUT_DIRECTORY / f"{block_name}.vz.safetensors",
-        OUTPUT_DIRECTORY / f"{block_name}.json",
-    )
-
-
-def is_block_done(block_index: int) -> bool:
-    return all(path.exists() for path in get_block_paths(block_index))
+def get_block_path(block_index: int) -> Path:
+    return OUTPUT_DIRECTORY / f"block_{block_index:06d}.vz.safetensors"
 
 
 @torch.no_grad()
@@ -172,9 +174,11 @@ def generate_blocks(
     scheduler: FlowMatchEulerDiscreteScheduler,
     vae: Flux2VAE,
     captured_activations: dict[str, torch.Tensor],
+    sdxl_text_encoder: SDXLTextEncoder,
 ) -> dict[str, torch.Tensor]:
     """
     returns:
+        prompt_embeds: [B, 77, 768], dtype: torch.float32, SDXL text encoder embeddings
         init_latents: [B, 32, H/8, W/8], dtype: torch.bfloat16
         latents_orig: [B, 32, H/8, W/8], dtype: torch.bfloat16
         latents_div_2: [B, 32, H/16, W/16], dtype: torch.bfloat16
@@ -239,7 +243,12 @@ def generate_blocks(
     )
     latents_div_2 = vae.encode(image_div_2)
 
+    sdxl_prompt_embeds = sdxl_text_encoder.encode_text_batch(
+        [specification["model_prompt"] for specification in specifications]
+    )
+
     return {
+        "prompt_embeds": sdxl_prompt_embeds.float(),
         "init_latents": init_latents,
         "latents_orig": latents_orig,
         "latents_div_2": latents_div_2,
@@ -247,11 +256,10 @@ def generate_blocks(
     }
 
 
-def save_block(
-    block_index: int, tensors: dict[str, torch.Tensor], item_index: int, specification: dict
-) -> None:
-    safetensors_path, json_path = get_block_paths(block_index)
+def save_block(block_index: int, tensors: dict[str, torch.Tensor], item_index: int) -> None:
+    safetensors_path = get_block_path(block_index)
     codecs = {
+        "prompt_embeds": PROMPT_EMBEDS_CODEC,
         "init_latents": LATENT_CODEC,
         "latents_orig": LATENT_CODEC,
         "latents_div_2": LATENT_CODEC,
@@ -265,17 +273,58 @@ def save_block(
     temporary_path = safetensors_path.with_name(safetensors_path.name + ".tmp")
     vaezip.save(encoded_tensors, path=temporary_path)
     os.replace(temporary_path, safetensors_path)
-    json_path.write_text(json.dumps(specification, indent=2))
+
+
+def get_benchmark_paths(sample_index: int) -> tuple[Path, Path]:
+    sample_name = f"flux_{sample_index:06d}"
+    return (
+        BENCHMARK_DIRECTORY / "images" / f"{sample_name}.png",
+        BENCHMARK_DIRECTORY / "prompt_embeds" / f"{sample_name}.vz.safetensors",
+    )
+
+
+@torch.no_grad()
+def save_benchmark_sample(
+    sample_index: int, tensors: dict[str, torch.Tensor], item_index: int, vae: Flux2VAE
+) -> None:
+    """
+    args:
+        tensors: output of generate_blocks()
+    """
+    image_path, prompt_embeds_path = get_benchmark_paths(sample_index)
+    latents = tensors["latents_orig"][item_index : item_index + 1]  # [1, 32, H/8, W/8]
+    image = vae.decode(latents).float().clamp(0, 1)
+    cv2.imwrite(str(image_path), torch_to_cv2(image))
+    vaezip.save_tensor(
+        tensors["prompt_embeds"][item_index : item_index + 1],
+        prompt_embeds_path,
+        codec=PROMPT_EMBEDS_CODEC,
+    )
 
 
 def main() -> None:
-    OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
-    base_prompts = load_base_prompts()
-    pending_indices = [
-        block_index for block_index in range(1, NUM_BLOCKS + 1) if not is_block_done(block_index)
-    ]
+    arguments = parse_arguments()
+    benchmark_mode = arguments.benchmark
+    output_directory = BENCHMARK_DIRECTORY if benchmark_mode else OUTPUT_DIRECTORY
+    if benchmark_mode:
+        (BENCHMARK_DIRECTORY / "images").mkdir(parents=True, exist_ok=True)
+        (BENCHMARK_DIRECTORY / "prompt_embeds").mkdir(parents=True, exist_ok=True)
+    else:
+        output_directory.mkdir(parents=True, exist_ok=True)
+    base_prompts, modifiers = load_prompt_sources()
+
+    if benchmark_mode:
+        item_indices = range(1, NUM_BENCHMARK_SAMPLES + 1)
+        seed_offset = BENCHMARK_SEED_OFFSET
+        is_done = lambda index: all(path.exists() for path in get_benchmark_paths(index))
+    else:
+        item_indices = range(1, NUM_BLOCKS + 1)
+        seed_offset = BASE_SEED
+        is_done = lambda index: get_block_path(index).exists()
+
+    pending_indices = [index for index in item_indices if not is_done(index)]
     if not pending_indices:
-        print(f"All {NUM_BLOCKS} blocks already exist in {OUTPUT_DIRECTORY}")
+        print(f"Everything already exists in {output_directory}")
         return
 
     text_encoder = Qwen3ForCausalLM.from_pretrained(
@@ -289,6 +338,7 @@ def main() -> None:
         MODEL_DIRECTORY / "transformer", torch_dtype=DTYPE
     ).to(DEVICE)
     vae = Flux2VAE(str(MODEL_DIRECTORY / "vae"), device=DEVICE, dtype=DTYPE)
+    sdxl_text_encoder = SDXLTextEncoder(str(SDXL_DIRECTORY), device=DEVICE, dtype=torch.float32)
 
     text_encoder.eval()
     transformer.eval()
@@ -310,7 +360,7 @@ def main() -> None:
         for batch_start in range(0, len(pending_indices), BATCH_SIZE):
             batch_indices = pending_indices[batch_start : batch_start + BATCH_SIZE]
             specifications = [
-                build_block_specification(block_index, base_prompts)
+                build_block_specification(seed_offset + block_index, base_prompts, modifiers)
                 for block_index in batch_indices
             ]
             tensors = generate_blocks(
@@ -321,9 +371,13 @@ def main() -> None:
                 scheduler,
                 vae,
                 captured_activations,
+                sdxl_text_encoder,
             )
             for item_index, block_index in enumerate(batch_indices):
-                save_block(block_index, tensors, item_index, specifications[item_index])
+                if benchmark_mode:
+                    save_benchmark_sample(block_index, tensors, item_index, vae)
+                else:
+                    save_block(block_index, tensors, item_index)
             progress_bar.update(len(batch_indices))
 
 
