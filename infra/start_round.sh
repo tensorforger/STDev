@@ -8,7 +8,7 @@ REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPOSITORY_ROOT"
 
 PYTHON="${PYTHON:-$REPOSITORY_ROOT/.venv/bin/python}"
-BENCHMARK_DATASETS=("benchmark_datasets/axis_1024" "benchmark_datasets/flux_1024")
+BENCHMARK_DATASETS=("benchmark_datasets/flux_1024")
 TRAINING_TIME_LIMIT="35m"
 KILL_GRACE_PERIOD="60s"
 
