@@ -1,0 +1,13 @@
+{
+  "run": "run_0001",
+  "samples": 1000,
+  "overrides": [],
+  "weights_directory": "dev/checkpoints/run_0001_raw",
+  "quality": {
+    "mse_hr_image": 0.004099454615905415,
+    "mse_lr_image": 0.002129820591006137,
+    "mse_hr_latents": 0.434658635109663,
+    "fid": 5.230565547943115,
+    "fid_patch": 4.578032970428467
+  }
+}

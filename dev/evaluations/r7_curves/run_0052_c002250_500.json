@@ -1,0 +1,15 @@
+{
+  "run": "run_0052",
+  "samples": 500,
+  "overrides": [
+    "MODEL_FILE_NAME='checkpoint_002250.safetensors'"
+  ],
+  "weights_directory": "",
+  "quality": {
+    "mse_hr_image": 0.004493843445379753,
+    "mse_lr_image": 0.002377722084958805,
+    "mse_hr_latents": 0.43868716272711755,
+    "fid": 34.28255081176758,
+    "fid_patch": 9.03601360321045
+  }
+}

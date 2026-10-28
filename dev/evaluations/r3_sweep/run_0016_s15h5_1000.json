@@ -1,0 +1,16 @@
+{
+  "run": "run_0016",
+  "samples": 1000,
+  "overrides": [
+    "NUM_SAMPLING_STEPS=15",
+    "SAMPLING_SIGMA_SHIFT=5.0"
+  ],
+  "weights_directory": "",
+  "quality": {
+    "mse_hr_image": 0.0031208349635307967,
+    "mse_lr_image": 0.0013372583908621892,
+    "mse_hr_latents": 0.38626557543873785,
+    "fid": 2.6835949420928955,
+    "fid_patch": 2.8679773807525635
+  }
+}
