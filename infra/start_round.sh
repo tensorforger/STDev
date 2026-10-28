@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Usage: ./infra/start_round.sh RUN_ID [RUN_ID ...] [--smoke]
 # Trains each run and then benchmarks it. Runs execute in parallel, one per GPU (run i on GPU i).
-# A failed run does not stop the others.
+# A failed run does not stop the others. TRAINING_TIME_LIMIT (timeout duration, default 35m)
+# overrides the training guard, e.g. for longer scaling rounds.
 
 set -u
 
@@ -10,7 +11,7 @@ cd "$REPOSITORY_ROOT"
 
 PYTHON="${PYTHON:-$REPOSITORY_ROOT/.venv/bin/python}"
 BENCHMARK_DATASETS=("benchmark_datasets/flux_1024")
-TRAINING_TIME_LIMIT="35m"
+TRAINING_TIME_LIMIT="${TRAINING_TIME_LIMIT:-35m}"
 KILL_GRACE_PERIOD="60s"
 NUM_GPUS="$(nvidia-smi --list-gpus | wc -l)"
 

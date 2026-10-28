@@ -22,6 +22,9 @@
 - More sampling steps hurt (grainy decoded detail), less so for stronger models: likely an
   undertraining effect, keep the step count as a tunable at scale.
 - See the Scale assessment section: 30 min results are biased towards fast models.
+- Status after round 10 (2 h scaling round): best fid_patch 1.30 (0078 SDXL style window
+  transformer UNet, 304M) and 1.31 (0077 deep full resolution decoder, 88M) at 30 sampling steps.
+  See RECOMMENDED SOLUTION FOR SCALING at the end of the log. No round running (user: stop here).
 
 ## Scale assessment (keep updated; user request after round 5)
 
@@ -517,3 +520,113 @@ Pareto archive after round 9 (lat1024 benchmark, fid_patch benchmark):
 Progress summary: baseline fid_patch 4.54 at 4.2 ms -> 2.08 at 2.37 ms (0067, 2x faster) and
 1.87 at 5.1 ms (0065). Round 10 on hold: the user is deciding between more 30 min rounds and a
 2 hour scaling experiment.
+
+## Round 10: 2 hour scaling round (user decision, 2026-10-28)
+
+User chose one 2 hour round over more 30 min rounds and asked for heavy architectures (more full
+resolution channels, up to 0.2-0.5B parameters, deeper full resolution decoder, multiple window
+attention blocks / SDXL style resnet + attention). infra/start_round.sh now takes
+TRAINING_TIME_LIMIT from the environment (default 35m, user approved); launched with 135m.
+
+Template (dev/make_round_10.py, from run_0066): per level channels / encoder / decoder blocks,
+window attention after every residual block on ATTENTION_LEVELS (middle uses the last flag),
+optional pointwise MLP after attention (SDXL style window transformer block), optional gradient
+checkpointing, TRAINING_TIME_SECONDS = 2 h, LR decay over the last 30% of time (from 84 min),
+checkpoints at 30/60/90 min (pre-decay at 30/60, in decay at 90). 0074 = run_0066 exactly
+(same parameter count). Profiles (steps/s with 8 concurrent where measured, latency at 1024):
+
+| Run ID | Run name | params | steps/s | ~steps in 2 h | lat1024 | train mem | Run purpose |
+|---|---|---|---|---|---|---|---|
+| 0072 | small: 2 levels (256,256), dec (3,1) (= 0067) | 18M | 10.0 | 72k | 2.26 | 5.5 GB | low end; 58 epochs: data limit? |
+| 0073 | medium: (256,256,512), dec (5,1,1) (= 0064) | 45M | 6.7 | 48k | 3.36 | 6.9 GB | mid |
+| 0074 | large: (512,256,512), dec (3,1,1) (= 0066) | 60M | 3.9 | 28k | 5.30 | 9.8 GB | best per step at 30 min |
+| 0075 | wide full res (768,384,768), dec (4,1,1) | 135M | 1.7 | 12k | 13.3 | 16.4 GB | width scaling |
+| 0076 | very wide full res (1024,512,1024), dec (4,1,1), grad ckpt | 231M | 0.83 | 6k | 21.3 | 14.9 GB | width scaling, heavy end |
+| 0077 | deep full res decoder (512,256,512), dec (8,1,1) | 88M | 2.0 | 14k | 9.8 | 15.0 GB | depth scaling vs 0075 |
+| 0078 | SDXL style (512,512,1024), enc (1,2,2), dec (3,2,2), 2 mid, window transformer (attn + MLP) after every block on all levels, grad ckpt | 304M | ~1.0 | 7k | 14.7 | 17.3 GB | attention blocks everywhere |
+| 0079 | big low res (512,768,1280), enc (1,2,2), dec (3,2,2), 2 mid, window transformers on levels 1, 2, mid, grad ckpt | 460M | ~1.1 | 8k | 15.1 | 15.4 GB | parameters at low resolution |
+
+Sampling: 14 steps (0072: 10); post-hoc steps sweep after the round. Analysis plan: 2 h benchmark
+vs the 30 min result of the same architecture (0067, 0064, 0066); per step paired loss across all;
+checkpoint fid_patch at 30/60/90 min on 1000 samples (pre-decay, curve shape only).
+
+### Round 10 results (2 hour scaling round)
+
+fid_patch (benchmark: 14 sampling steps, 0072: 10) and post-hoc 20 steps; ckpt = fid_patch of the
+30/60/90 min checkpoints (14 steps, before the LR decay at 30/60 min, 1000 samples); losses are
+paired train/loss at 4k steps (all pre-decay) and at 84 min (pre-decay, per time).
+
+| run | design | params | steps | fid_patch | @20 steps | fid | lat1024 | loss@4k | loss@84min | ckpt 30/60/90 min | 30 min run of the same arch |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0072 | small 2 levels (256,256) dec (3,1) | 18M | 69.1k | 1.78 | 1.72 (14: 1.72) | 2.08 | 2.42 | 0.6719 | 0.5995 | 2.42/2.22/2.28 | 0067: 2.08 |
+| 0073 | (256,256,512) dec (5,1,1) | 45M | 45.6k | 1.53 | 1.52 (10: 1.62) | 1.88 | 3.53 | 0.6595 | 0.5912 | 2.47/1.90/1.84 | 0064: 1.94 |
+| 0074 | (512,256,512) dec (3,1,1) | 60M | 27.0k | 1.44 | 1.40 (10: 1.55) | 1.78 | 5.65 | 0.6341 | 0.5825 | 2.48/2.23/1.70 | 0066: 1.87 |
+| 0075 | (768,384,768) dec (4,1,1) | 135M | 11.7k | 1.41 | 1.35 (10: 1.53) | 1.72 | 14.1 | 0.6074 | 0.5810 | 2.61/2.02/1.98 | - |
+| 0076 | (1024,512,1024) dec (4,1,1) | 231M | 5.7k | 1.54 | 1.49 | 1.91 | 21.5 | 0.5983 | 0.6063 | 3.83/2.94/2.36 | - |
+| 0077 | (512,256,512) dec (8,1,1) | 88M | 13.4k | 1.38 | 1.32 | 1.71 | 10.8 | 0.6110 | 0.5800 | 2.65/1.87/1.62 | - |
+| 0078 | SDXL style (512,512,1024), window transformer after every block, all levels | 304M | 7.1k | 1.38 | 1.32 | 1.69 | 14.5 | 0.5913 | 0.5799 | 2.86/1.95/1.72 | - |
+| 0079 | big low res (512,768,1280) + window transformers | 460M | 7.8k | 1.48 | 1.46 | 1.84 | 15.7 | 0.6165 | 0.6042 | 4.06/2.36/2.13 | - |
+
+Findings:
+1. 4x compute improves every architecture by 0.30-0.43 fid_patch, more for the larger models
+   (18M: -0.30, 45M: -0.41, 60M: -0.43). The compute optimal size grows with the budget: best at
+   30 min were 50-60M models, at 2 h the 88M deep decoder (0077) and the 304M SDXL style model
+   (0078) tie at the top (1.38; 1.32 with 20 steps).
+2. Per step the heavy models learn fastest (SDXL style 0.591, 1024 wide 0.598, 768 wide 0.607, deep
+   0.611 at 4k vs 0.634 for 0074). Per time the ranking moves with compute: at 30 min the deep
+   decoder and 512 wide models lead, by 84 min SDXL style, deep and 768 wide tie (~0.580) and SDXL
+   style closes fastest. 1024 wide (5.7k steps, gradient checkpointing) is still undertrained at 2 h.
+3. Full resolution depth is more latency efficient than width: 0077 (512, 8 decoder blocks) 1.38 at
+   10.8 ms vs 0075 (768, 4 blocks) 1.41 at 14.1 ms, similar per step loss.
+4. Parameters at low resolution do not pay off even at scale: 0079 (460M) is the worst per time and
+   only middling per step (budget-robust negative, consistent with 0018/0031).
+5. The sampler optimum keeps moving with training: after 2 h, 20 steps beat 14 steps by 0.04-0.06
+   on every model >= 45M; the small model is flat between 14 and 20.
+6. The LR anneal is essential: the 90 min checkpoint (pre-decay) is 0.26-0.8 fid_patch worse than
+   the annealed 2 h model; unannealed checkpoint fid is only a rough curve-shape signal.
+7. Data: the 18M model saw 55 epochs and still improved over 30 min (2.08 -> 1.78), but its pre-decay
+   checkpoints flatten after 60 min (2.22 -> 2.28): first hint that small models saturate on 20k
+   samples; larger models show no saturation yet.
+
+2 h Pareto (lat1024 ms, fid_patch @20 steps): 0072 (2.42, 1.72), 0073 (3.53, 1.52),
+0074 (5.65, 1.40), 0077 (10.8, 1.32). 0078 ties 0077 in quality at higher latency but is the best
+per step, so it is the strongest candidate for budgets beyond 2 GPU hours.
+
+Sampler sweep on the 2 h models (dev/evaluations/r10): fid_patch at 14 / 20 / 30 steps (shift 3):
+0072 1.72 / 1.72 / 1.77; 0073 1.53 / 1.52 / 1.54; 0074 1.44 / 1.40 / 1.40; 0075 1.41 / 1.35 / 1.33;
+0077 1.38 / 1.32 / 1.31; 0078 1.38 / 1.32 / 1.30. 20 steps at shift 2: 0077 1.31, 0078 1.30 (= 30
+steps at shift 3). Large well trained models want 20-30 steps (or 20 at shift 2); models <= 45M
+peak at 14-20 steps.
+
+## RECOMMENDED SOLUTION FOR SCALING (summary after round 10)
+
+Best measured: run_0078 / run_0077 after 2 h: fid_patch 1.30 / 1.31 (30 steps; 1.38 in the
+benchmark at 14 steps) vs 4.54 for the baseline (20 steps, 30 min). Recipe:
+
+- Model: convolutional UNet on the latent grid, 3 levels. All capacity at full (latent) resolution:
+  level 0 width >= 512 with a decoder heavy layout (encoder 1 block, decoder 6-8 blocks). Lower
+  levels small and shallow ((256, 512), 1 block each, 1 middle block). Residual blocks with
+  GroupNorm, FiLM (scale/shift) of the noise level + pooled text embedding, zero initialized last
+  convolutions. 8x8 window self-attention after every block on levels 1, 2 and middle (the only
+  attention that helped). For budgets beyond ~2 GPU hours, use SDXL style window transformer
+  blocks (window attention + MLP) after every block on all levels incl. full resolution (0078):
+  best per step of all models, ties the best quality at 2 h with half the steps.
+- Conditioning: bilinear upsampled LR latents concatenated to the noisy latents; mean pooled SDXL
+  prompt embedding added to the condition vector.
+- Training: flow matching with velocity target, independent Gaussian noise, logit-normal sigmas
+  without shift (shift 1), AdamW lr 4e-4, betas (0.9, 0.95), batch 16, 100 warmup steps, linear LR
+  decay to zero over the last 30% of training (essential: 0.3-0.8 fid_patch), grad clip 1, bf16.
+- Sampling: Euler, 20 steps at shift 2 (or 30 at shift 3) for large well trained models; 10-14
+  steps for small or short trained models (the optimum grows with model quality). CUDA graphs
+  (torch.compile mode reduce-overhead) for latency.
+- Size by budget: the compute optimal size grows with compute (50-60M best at 30 min, 90-300M at
+  2 h; 1024 wide and 460M were undertrained at 2 h). Latency options after 2 h (lat1024, fid_patch
+  at 20 steps): 18M 2-level 2.4 ms / 1.72; 45M 3.5 ms / 1.52; 60M 5.7 ms / 1.40; 88M deep decoder
+  10.8 ms / 1.32 (most latency efficient top model); 304M SDXL style 14.5 ms / 1.32.
+- Do not use (no gain per step, budget-robust): REPA (2 depths), global tokens / control stream,
+  text cross-attention, parameters at low resolution (wide or deep lower levels, 0079), coupled
+  noise, patchify 2x2 input, ConvNeXt blocks, flip augmentation (VAE not flip equivariant),
+  EMA (neutral with LR decay at <= 2 h).
+- Open at larger scale: data size (20k samples; the 18M model starts to saturate after ~40
+  epochs), larger batches, EMA for long runs, full resolution window attention + MLP vs depth at
+  equal latency, 1024 wide level 0 with enough steps.
