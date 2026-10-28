@@ -29,9 +29,19 @@ git clone https://huggingface.co/datasets/refine-axis/axis-v1_1k
 
 ## Usage
 
-```bash
+### Generate FLUX datasets
 
+`scripts/generate_flux_dataset.py` shards samples across GPUs with `torchrun` (rank `r` handles every `WORLD_SIZE`-th sample). Already existing files are skipped, so interrupted runs can be resumed by re-running the same command.
+
+```bash
+# benchmark dataset (1000 samples) -> benchmark_datasets/flux_1024
+torchrun --standalone --nproc_per_node=8 scripts/generate_flux_dataset.py --benchmark
+
+# training dataset (20k blocks) -> train_datasets/flux_1024_20k
+torchrun --standalone --nproc_per_node=8 scripts/generate_flux_dataset.py
 ```
+
+Without `torchrun` the script runs on a single GPU (`python scripts/generate_flux_dataset.py`). Use `CUDA_VISIBLE_DEVICES` with a smaller `--nproc_per_node` to use a subset of GPUs.
 
 
 ## License

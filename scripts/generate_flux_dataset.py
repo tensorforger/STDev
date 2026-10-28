@@ -22,10 +22,10 @@ MODEL_DIRECTORY = REPOSITORY_ROOT / "models" / "FLUX.2-klein-4B"
 SDXL_DIRECTORY = REPOSITORY_ROOT / "models" / "stable-diffusion-xl-base-1.0"
 BASE_PROMPTS_PATH = REPOSITORY_ROOT / "prompts" / "base_prompts.json"
 MODIFIERS_PATH = REPOSITORY_ROOT / "prompts" / "modifiers.json"
-OUTPUT_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_1k"
+OUTPUT_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_20k"
 BENCHMARK_DIRECTORY = REPOSITORY_ROOT / "benchmark_datasets" / "flux_1024"
 
-NUM_BLOCKS = 1000
+NUM_BLOCKS = 20_000
 NUM_BENCHMARK_SAMPLES = 1000
 BENCHMARK_SEED_OFFSET = 1_000_000
 BATCH_SIZE = 1
@@ -40,8 +40,12 @@ VAE_SPATIAL_COMPRESSION = 8
 LATENT_CODEC = "lbrq_8bit"
 ACTIVATION_CODEC = "lbrq_4bit"
 PROMPT_EMBEDS_CODEC = "cast_fp16"
-DEVICE = "cuda"
 DTYPE = torch.bfloat16
+
+RANK = int(os.environ.get("RANK", 0))
+WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 1))
+LOCAL_RANK = int(os.environ.get("LOCAL_RANK", 0))
+DEVICE = f"cuda:{LOCAL_RANK}"
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -303,6 +307,7 @@ def save_benchmark_sample(
 
 
 def main() -> None:
+    torch.cuda.set_device(DEVICE)
     arguments = parse_arguments()
     benchmark_mode = arguments.benchmark
     output_directory = BENCHMARK_DIRECTORY if benchmark_mode else OUTPUT_DIRECTORY
@@ -322,9 +327,11 @@ def main() -> None:
         seed_offset = BASE_SEED
         is_done = lambda index: get_block_path(index).exists()
 
-    pending_indices = [index for index in item_indices if not is_done(index)]
+    # Each rank takes a fixed stride of the full index range, so ranks never overlap
+    # regardless of which files already exist when they start.
+    pending_indices = [index for index in item_indices[RANK::WORLD_SIZE] if not is_done(index)]
     if not pending_indices:
-        print(f"Everything already exists in {output_directory}")
+        print(f"[rank {RANK}] Everything already exists in {output_directory}")
         return
 
     text_encoder = Qwen3ForCausalLM.from_pretrained(
@@ -356,7 +363,9 @@ def main() -> None:
     vae.model.encoder = torch.compile(vae.model.encoder)
     vae.model.decoder = torch.compile(vae.model.decoder)
 
-    with tqdm(total=len(pending_indices), desc="Generating blocks") as progress_bar:
+    with tqdm(
+        total=len(pending_indices), desc=f"Generating blocks [rank {RANK}]", position=RANK
+    ) as progress_bar:
         for batch_start in range(0, len(pending_indices), BATCH_SIZE):
             batch_indices = pending_indices[batch_start : batch_start + BATCH_SIZE]
             specifications = [

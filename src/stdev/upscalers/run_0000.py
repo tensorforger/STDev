@@ -15,7 +15,7 @@ from stdev.upscalers.base import Upscaler
 
 RUN_NAME = "run_0000"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-DATASET_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_1k"
+DATASET_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_20k"
 OUTPUT_DIRECTORY = REPOSITORY_ROOT / "trained_models" / RUN_NAME
 TENSORBOARD_DIRECTORY = REPOSITORY_ROOT / "tensorboard" / RUN_NAME
 MODEL_FILE_NAME = "model.safetensors"

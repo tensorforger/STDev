@@ -2,11 +2,11 @@
 
 ## Research hyperparamters
 
-- Number of runs per round **N=1**
+- Number of runs per round **N=8**
 - GPU memory available to a run **VRAM_LIMIT=32** GB (one RTX 5090). A run may use the entire GPU.
-- Runs of a round are currently executed **sequentially** on a single GPU by `start_round.sh`
-- Dataset should be used for model training is **DATASET=`./train_datasets/flux_1024_1k`**
-- This dataset contains 1000 blocks `block_<index>.vz.safetensors` (vaezip format, load with `vaezip.load`, `.decode(dtype=...)`). Each block is one teacher (FLUX.2-klein-4B, 4 steps, 1024x1024) generation with a single sample per tensor:
+- Runs of a round are executed **in parallel** by `start_round.sh`: run i of the list gets its own GPU (8 GPUs, so up to 8 runs per round). The benchmark of each run also runs in parallel on its GPU. Each run sees exactly one GPU (`CUDA_VISIBLE_DEVICES`), so keep using plain `"cuda"`.
+- Dataset should be used for model training is **DATASET=`./train_datasets/flux_1024_20k`**
+- This dataset contains 20000 blocks `block_<index>.vz.safetensors` (vaezip format, load with `vaezip.load`, `.decode(dtype=...)`). Each block is one teacher (FLUX.2-klein-4B, 4 steps, 1024x1024) generation with a single sample per tensor:
 
 | Key                | Shape (1024 px image)  | Codec        | Purpose                                                                                           |
 |--------------------|------------------------|--------------|---------------------------------------------------------------------------------------------------|

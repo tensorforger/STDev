@@ -14,6 +14,7 @@ from stdev.benchmark.efficiency import measure_latency, measure_memory
 from stdev.benchmark.quality import build_fid_evaluator, evaluate_quality, populate_latent_cache
 from stdev.upscalers.base import Upscaler
 from stdev.upscalers.loading import load_upscaler
+from stdev.utils.fid import FIDEvaluator
 from stdev.vaes.flux_2_vae import Flux2VAE
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -45,9 +46,18 @@ def parse_arguments() -> argparse.Namespace:
         required=True,
         help="Benchmark dataset directories, e.g. real images and teacher generations.",
     )
-    parser.add_argument("--upscaler", type=Path, required=True)
+    parser.add_argument("--upscaler", type=Path)
     parser.add_argument("--smoke", action="store_true")
-    return parser.parse_args()
+    parser.add_argument(
+        "--prepare-cache",
+        action="store_true",
+        help="Only fill the ground truth latent and FID statistics caches, then exit. "
+        "Run once before benchmarking in parallel to avoid concurrent cache writes.",
+    )
+    arguments = parser.parse_args()
+    if arguments.upscaler is None and not arguments.prepare_cache:
+        parser.error("--upscaler is required unless --prepare-cache is set")
+    return arguments
 
 
 def main() -> None:
@@ -99,16 +109,9 @@ def measure_efficiency(
     return efficiency
 
 
-def measure_quality(
-    upscaler: Upscaler,
-    vae: Flux2VAE,
-    dataset: BenchmarkDataset,
-    cache_directory: Path,
-    images_directory: Path,
-) -> dict[str, float]:
-    """
-    FID is computed against the images of the same dataset.
-    """
+def prepare_cache(
+    vae: Flux2VAE, dataset: BenchmarkDataset, cache_directory: Path
+) -> tuple[LatentCache, FIDEvaluator, int]:
     image_size = dataset.load_image(dataset.sample_names[0]).shape[-1]
     cache = LatentCache(
         cache_directory,
@@ -124,6 +127,20 @@ def measure_quality(
     )
     populate_latent_cache(dataset, vae, cache, SCALE_FACTOR, SEED)
     fid_evaluator = build_fid_evaluator(dataset, cache, image_size)
+    return cache, fid_evaluator, image_size
+
+
+def measure_quality(
+    upscaler: Upscaler,
+    vae: Flux2VAE,
+    dataset: BenchmarkDataset,
+    cache_directory: Path,
+    images_directory: Path,
+) -> dict[str, float]:
+    """
+    FID is computed against the images of the same dataset.
+    """
+    cache, fid_evaluator, _ = prepare_cache(vae, dataset, cache_directory)
 
     return evaluate_quality(
         upscaler=upscaler,
@@ -143,8 +160,15 @@ def run_benchmark(exit_stack: ExitStack) -> None:
     smoke = arguments.smoke
     dataset_names = [dataset_path.name for dataset_path in arguments.datasets]
 
-    upscaler = load_upscaler(arguments.upscaler)
     vae = Flux2VAE(str(VAE_PATH), device="cuda", dtype=VAE_DTYPE)
+    if arguments.prepare_cache:
+        for dataset_path, dataset_name in zip(arguments.datasets, dataset_names):
+            prepare_cache(
+                vae, BenchmarkDataset(dataset_path), BENCHMARK_CACHE_DIRECTORY / dataset_name
+            )
+        return
+
+    upscaler = load_upscaler(arguments.upscaler)
 
     results_directory = RAW_RESULTS_DIRECTORY / upscaler.get_name()
     cache_root_directory = BENCHMARK_CACHE_DIRECTORY
