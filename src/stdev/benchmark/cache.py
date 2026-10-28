@@ -17,6 +17,7 @@ class LatentCache:
         self.cache_directory = cache_directory
         self.codec = codec
         self.fid_statistics_path = cache_directory / "fid_stats.pt"
+        self.fid_patch_statistics_path = cache_directory / "fid_patch_stats.pt"
         cache_directory.mkdir(parents=True, exist_ok=True)
         for kind in LATENT_KINDS:
             (cache_directory / f"latents_{kind}").mkdir(exist_ok=True)

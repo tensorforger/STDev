@@ -113,7 +113,7 @@ There is no simple goal here: you are jointly optimizing a set of objectives.
 
 They can approximately be ordered by the priority:
 
-1. Benchmark quality metrics. FID (lower is better): `quality.flux_1024.fid` (teacher-generated images, the upscaled images against the teacher images). Differences below ~0.5 FID are treated as noise (single seed) until measured.
+1. Benchmark quality metric. Patch FID (lower is better): `quality.flux_1024.fid_patch` (teacher-generated images, the upscaled images against the teacher images, compared as non-overlapping native resolution 256x256 tiles). This is the main quality metric: unlike whole-image FID, it sees the high frequency detail the upscaler generates. Its noise level is not measured yet; treat small differences as noise (single seed) until measured. The whole-image FID `quality.flux_1024.fid` (images resized to 299 by Inception) and the `mse_*` metrics are helper metrics only: use them to diagnose problems such as color or low frequency drift, not as objectives.
 2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized). Latency is the latency of a **single model forward pass** (`Upscaler.single_forward`), not of the whole sampling loop. Minimize it. Reducing the number of sampling steps is not a latency gain here, low-step distillation is out of scope.
 
 Quality and computational efficiency form a pareto-frontier. Don't try to find "best balance" in a single setup. Instead, undertsand the parameter relationship and move the entire frontier forward.

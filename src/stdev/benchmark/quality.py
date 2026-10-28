@@ -13,6 +13,8 @@ from stdev.utils.fid import FIDEvaluator, FIDReference
 from stdev.utils.image_tools import torch_to_cv2
 from stdev.vaes.image_vae import ImageVAE
 
+FID_PATCH_SIZE = 256
+
 
 def resize_bilinear(image: torch.Tensor, scale: float) -> torch.Tensor:
     """
@@ -51,6 +53,10 @@ def build_fid_evaluator(
     cache: LatentCache,
     image_size: int,
 ) -> FIDEvaluator:
+    """
+    `fid` compares whole images resized to 299 by Inception (global structure and color).
+    `fid_patch` compares native resolution FID_PATCH_SIZE tiles (generated high frequency detail).
+    """
     return FIDEvaluator(
         references=[
             FIDReference(
@@ -58,6 +64,13 @@ def build_fid_evaluator(
                 image_dir=str(dataset.images_directory),
                 stats_path=str(cache.fid_statistics_path),
                 file_names=dataset.get_image_file_names(),
+            ),
+            FIDReference(
+                name="fid_patch",
+                image_dir=str(dataset.images_directory),
+                stats_path=str(cache.fid_patch_statistics_path),
+                file_names=dataset.get_image_file_names(),
+                patch_size=FID_PATCH_SIZE,
             ),
         ],
         image_size=image_size,
