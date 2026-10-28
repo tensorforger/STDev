@@ -113,8 +113,11 @@ There is no simple goal here: you are jointly optimizing a set of objectives.
 
 They can approximately be ordered by the priority:
 
-1. Benchmark quality metrics. FID (lower is better): `quality.axis_1024.fid` (real photos, the upscaled images against the real images) and `quality.flux_1024.fid` (teacher-generated images, the upscaled images against the teacher images). Each dataset is evaluated on its own images. Differences below ~0.5 FID are treated as noise (single seed) until measured.
+1. Benchmark quality metrics. FID (lower is better): `quality.flux_1024.fid` (teacher-generated images, the upscaled images against the teacher images). Differences below ~0.5 FID are treated as noise (single seed) until measured.
 2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized). Latency is the latency of a **single model forward pass** (`Upscaler.single_forward`), not of the whole sampling loop. Minimize it. Reducing the number of sampling steps is not a latency gain here, low-step distillation is out of scope.
+
+Quality and computational efficiency form a pareto-frontier. Don't try to find "best balance" in a single setup. Instead, undertsand the parameter relationship and move the entire frontier forward.
+
 3. Training loss (for equivalent loss and data setups, for architecture design only)
 4. Implementation simplicity (as a term of regularization)
 
