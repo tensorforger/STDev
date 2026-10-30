@@ -1,0 +1,606 @@
+[
+ {
+  "dtype": "fp32",
+  "resolution": 256,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 204.66422372626334,
+    "decode_ips": 106.2646677971288,
+    "peak_memory_gb": 16.692981719970703
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 226.4790943403973,
+    "decode_ips": 108.67597676569484,
+    "peak_memory_gb": 16.91258668899536
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 222.54780862952413,
+    "decode_ips": 108.09369822773499,
+    "peak_memory_gb": 17.82115602493286
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 219.304602741402,
+    "decode_ips": 109.3628168682546,
+    "peak_memory_gb": 19.20152711868286
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 241.80491147097902,
+    "decode_ips": 108.59551300243785,
+    "peak_memory_gb": 21.96226930618286
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 239.0103441565519,
+    "decode_ips": 108.26879839085959,
+    "peak_memory_gb": 27.48375368118286
+   },
+   {
+    "batch_size": 64,
+    "encode_ips": 238.71114133183062,
+    "decode_ips": 123.06909891958749,
+    "peak_memory_gb": 23.34178590774536
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 256,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 223.5025615499235,
+    "decode_ips": 113.43830326210954,
+    "peak_memory_gb": 16.787348747253418
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 260.39279741371206,
+    "decode_ips": 122.94953222920242,
+    "peak_memory_gb": 0.7849016189575195
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 268.27413642824297,
+    "decode_ips": 117.19125389943545,
+    "peak_memory_gb": 1.1946921348571777
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 264.93753006347026,
+    "decode_ips": 121.18016098240119,
+    "peak_memory_gb": 2.070669651031494
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 298.3894306595597,
+    "decode_ips": 122.82875006764034,
+    "peak_memory_gb": 3.822624683380127
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 308.66581038823296,
+    "decode_ips": 120.6024559253342,
+    "peak_memory_gb": 7.326534748077393
+   },
+   {
+    "batch_size": 64,
+    "encode_ips": 313.7601666415978,
+    "decode_ips": 149.425922721812,
+    "peak_memory_gb": 14.332386493682861
+   },
+   {
+    "batch_size": 128,
+    "encode_ips": 280.050870628101,
+    "decode_ips": 131.7956919750491,
+    "peak_memory_gb": 20.878162384033203
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 512,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 49.55287854034785,
+    "decode_ips": 25.36354623236272,
+    "peak_memory_gb": 16.679920196533203
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 50.32819134428768,
+    "decode_ips": 24.27987592518885,
+    "peak_memory_gb": 16.886463165283203
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 51.33485599910255,
+    "decode_ips": 25.565061559750347,
+    "peak_memory_gb": 17.329456329345703
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 51.90839987978615,
+    "decode_ips": 26.19503993011578,
+    "peak_memory_gb": 18.218128204345703
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 56.619971011964395,
+    "decode_ips": 26.11229513795567,
+    "peak_memory_gb": 20.41746950149536
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 56.63119864529916,
+    "decode_ips": 26.161190984083188,
+    "peak_memory_gb": 24.411365509033203
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 512,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 54.2208481173762,
+    "decode_ips": 27.557113646121763,
+    "peak_memory_gb": 16.760138988494873
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 63.331209436809345,
+    "decode_ips": 25.992225976482537,
+    "peak_memory_gb": 2.0706686973571777
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 62.061188546860976,
+    "decode_ips": 26.887522638410715,
+    "peak_memory_gb": 3.8226218223571777
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 64.99029763581713,
+    "decode_ips": 27.16402376689743,
+    "peak_memory_gb": 7.326529026031494
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 73.66870890944612,
+    "decode_ips": 27.140693980263393,
+    "peak_memory_gb": 14.334343433380127
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 73.94022681047333,
+    "decode_ips": 30.343488296996846,
+    "peak_memory_gb": 20.410061359405518
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 1024,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 10.083889004621394,
+    "decode_ips": 5.694353856057343,
+    "peak_memory_gb": 16.741443634033203
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 10.720423643291218,
+    "decode_ips": 5.585096572421107,
+    "peak_memory_gb": 17.11278200149536
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 11.027034320559974,
+    "decode_ips": 5.891312679953456,
+    "peak_memory_gb": 19.626453399658203
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 11.139180847416432,
+    "decode_ips": 6.0406527457751755,
+    "peak_memory_gb": 24.411365509033203
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 1024,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 10.29530213036067,
+    "decode_ips": 5.80563574878108,
+    "peak_memory_gb": 16.77879762649536
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 13.15460380115385,
+    "decode_ips": 5.379567693947394,
+    "peak_memory_gb": 7.326528072357178
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 13.481900142912941,
+    "decode_ips": 5.405036340758954,
+    "peak_memory_gb": 14.334340572357178
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 13.619569395642717,
+    "decode_ips": 5.375953420157529,
+    "peak_memory_gb": 24.35298776626587
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 2048,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 1.664576119968551,
+    "decode_ips": 1.1072087514066615,
+    "peak_memory_gb": 23.34178590774536
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 1.7365442316727417,
+    "decode_ips": 1.0810283405326995,
+    "peak_memory_gb": 24.411365509033203
+   }
+  ]
+ },
+ {
+  "dtype": "fp32",
+  "resolution": 2048,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 1.6164780633931635,
+    "decode_ips": 1.0640425869783692,
+    "peak_memory_gb": 16.605458736419678
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 1.9811001834041602,
+    "decode_ips": 0.9868946393852763,
+    "peak_memory_gb": 24.352986812591553
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 256,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 342.31006549121275,
+    "decode_ips": 182.796568745257,
+    "peak_memory_gb": 0.5031623840332031
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 422.7426605193749,
+    "decode_ips": 210.87575186033456,
+    "peak_memory_gb": 0.5880789756774902
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 448.02634937362274,
+    "decode_ips": 228.54856817188204,
+    "peak_memory_gb": 1.0103201866149902
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 422.16512668261294,
+    "decode_ips": 228.71697280688173,
+    "peak_memory_gb": 1.8548026084899902
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 409.3785035763886,
+    "decode_ips": 224.75420465304123,
+    "peak_memory_gb": 3.5437674522399902
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 408.1017633453072,
+    "decode_ips": 224.7513348757235,
+    "peak_memory_gb": 6.92169713973999
+   },
+   {
+    "batch_size": 64,
+    "encode_ips": 406.11446857662884,
+    "decode_ips": 202.97147492823814,
+    "peak_memory_gb": 13.677311897277832
+   },
+   {
+    "batch_size": 128,
+    "encode_ips": 403.6696866948117,
+    "decode_ips": 202.65432075953714,
+    "peak_memory_gb": 19.187077522277832
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 256,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 426.0913414311324,
+    "decode_ips": 221.26441647447925,
+    "peak_memory_gb": 0.3534665107727051
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 494.292007330511,
+    "decode_ips": 251.5442171390057,
+    "peak_memory_gb": 0.44466400146484375
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 522.7709223460864,
+    "decode_ips": 264.51747344913326,
+    "peak_memory_gb": 0.5389275550842285
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 511.52506500509514,
+    "decode_ips": 269.50913138660985,
+    "peak_memory_gb": 0.9149165153503418
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 509.3826494890825,
+    "decode_ips": 271.7451137721033,
+    "peak_memory_gb": 1.6678709983825684
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 510.53500211303214,
+    "decode_ips": 274.9532557406205,
+    "peak_memory_gb": 3.1737799644470215
+   },
+   {
+    "batch_size": 64,
+    "encode_ips": 508.27830475872815,
+    "decode_ips": 238.57713076368395,
+    "peak_memory_gb": 8.171452522277832
+   },
+   {
+    "batch_size": 128,
+    "encode_ips": 509.4822609423255,
+    "decode_ips": 240.28674130192428,
+    "peak_memory_gb": 16.179265022277832
+   },
+   {
+    "batch_size": 256,
+    "encode_ips": 495.38120608910646,
+    "decode_ips": 126.0032570877658,
+    "peak_memory_gb": 24.286686897277832
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 512,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 95.01195511009327,
+    "decode_ips": 48.42931875647164,
+    "peak_memory_gb": 1.0083670616149902
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 97.32322242378609,
+    "decode_ips": 47.13667195746982,
+    "peak_memory_gb": 1.8548026084899902
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 92.75620226407011,
+    "decode_ips": 51.2581601434255,
+    "peak_memory_gb": 3.5437674522399902
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 98.30211151668244,
+    "decode_ips": 54.83224586636861,
+    "peak_memory_gb": 6.92169713973999
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 95.62147696490236,
+    "decode_ips": 55.114069986771575,
+    "peak_memory_gb": 13.67755651473999
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 92.69331810967728,
+    "decode_ips": 54.47333523872753,
+    "peak_memory_gb": 22.187626838684082
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 512,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 112.05869133879435,
+    "decode_ips": 54.16424573807698,
+    "peak_memory_gb": 0.917809009552002
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 122.36621246186405,
+    "decode_ips": 57.20476809594165,
+    "peak_memory_gb": 1.0064258575439453
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 122.46740301695078,
+    "decode_ips": 57.58246829094112,
+    "peak_memory_gb": 1.6678338050842285
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 123.35387206253726,
+    "decode_ips": 58.193226112515845,
+    "peak_memory_gb": 3.173705577850342
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 122.9206749824404,
+    "decode_ips": 58.35155647465406,
+    "peak_memory_gb": 6.185449123382568
+   },
+   {
+    "batch_size": 32,
+    "encode_ips": 122.41061612044942,
+    "decode_ips": 67.80649971874637,
+    "peak_memory_gb": 12.271069526672363
+   },
+   {
+    "batch_size": 64,
+    "encode_ips": 118.12808042037284,
+    "decode_ips": 39.83581994625,
+    "peak_memory_gb": 24.255712032318115
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 1024,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 19.427073002721574,
+    "decode_ips": 10.704012975725817,
+    "peak_memory_gb": 3.5418143272399902
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 20.884308885690427,
+    "decode_ips": 10.969174166402956,
+    "peak_memory_gb": 6.92169713973999
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 21.566027632149286,
+    "decode_ips": 12.286295474623909,
+    "peak_memory_gb": 13.67755651473999
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 21.630626282440698,
+    "decode_ips": 12.88982813987445,
+    "peak_memory_gb": 22.187626838684082
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 1024,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 24.684340780619156,
+    "decode_ips": 12.145847947477964,
+    "peak_memory_gb": 3.1692566871643066
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 26.05918598933767,
+    "decode_ips": 12.096230399711734,
+    "peak_memory_gb": 3.2593441009521484
+   },
+   {
+    "batch_size": 4,
+    "encode_ips": 26.338578851070135,
+    "decode_ips": 12.128898306978956,
+    "peak_memory_gb": 6.185446262359619
+   },
+   {
+    "batch_size": 8,
+    "encode_ips": 26.49339337429848,
+    "decode_ips": 11.859734467410473,
+    "peak_memory_gb": 12.271063804626465
+   },
+   {
+    "batch_size": 16,
+    "encode_ips": 25.565189766784012,
+    "decode_ips": 15.777065541151554,
+    "peak_memory_gb": 24.286690711975098
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 2048,
+  "compiled": false,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 3.467232626031792,
+    "decode_ips": 2.1839200356985704,
+    "peak_memory_gb": 13.679265022277832
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 3.638525968243205,
+    "decode_ips": 2.2341267061783685,
+    "peak_memory_gb": 22.187626838684082
+   }
+  ]
+ },
+ {
+  "dtype": "bf16",
+  "resolution": 2048,
+  "compiled": true,
+  "results": [
+   {
+    "batch_size": 1,
+    "encode_ips": 3.738310640244684,
+    "decode_ips": 2.2193142230930913,
+    "peak_memory_gb": 12.173651218414307
+   },
+   {
+    "batch_size": 2,
+    "encode_ips": 4.246098115773472,
+    "decode_ips": 2.1854022918407785,
+    "peak_memory_gb": 12.208929538726807
+   }
+  ]
+ }
+]

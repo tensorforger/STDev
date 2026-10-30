@@ -24,6 +24,10 @@ dependencies = [
     "omegaconf",
     "vaezip",
     "ipywidgets",
+    "matplotlib",
+    "datasets",
+    "nbformat",
+    "nbconvert",
 ]
 
 [project.optional-dependencies]
