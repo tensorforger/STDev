@@ -1,0 +1,35 @@
+{"name": "0078", "latent_size": 64, "image_resolution": 512, "batch_size": 64, "gradient_checkpointing": false, "error": "oom"}
+{"name": "0078", "latent_size": 64, "image_resolution": 512, "batch_size": 128, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 128, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 64, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 64, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 128, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 128, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 128, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 64, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 64, "image_resolution": 512, "batch_size": 64, "gradient_checkpointing": true, "error": "oom"}
+{"name": "0078", "latent_size": 64, "image_resolution": 512, "batch_size": 128, "gradient_checkpointing": true, "error": "oom"}
+{"name": "0078", "latent_size": 64, "image_resolution": 512, "batch_size": 64, "gradient_checkpointing": true, "parameters_m": 303.708192, "step_ms": 869.9586408212781, "samples_per_second": 73.56671569993405, "peak_memory_gb": 17.311298847198486}
+{"name": "1024_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 32, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 32, "gradient_checkpointing": false, "error": "oom"}
+{"name": "0078", "latent_size": 128, "image_resolution": 1024, "batch_size": 32, "gradient_checkpointing": false, "error": "oom"}
+{"name": "0078", "latent_size": 128, "image_resolution": 1024, "batch_size": 16, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 16, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 16, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 32, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 32, "gradient_checkpointing": true, "error": "oom"}
+{"name": "0078", "latent_size": 128, "image_resolution": 1024, "batch_size": 32, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 16, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 8, "gradient_checkpointing": false, "error": "oom"}
+{"name": "0078", "latent_size": 128, "image_resolution": 1024, "batch_size": 16, "gradient_checkpointing": true, "parameters_m": 303.708192, "step_ms": 881.4289675094187, "samples_per_second": 18.152341924057573, "peak_memory_gb": 17.292070865631104}
+{"name": "1280_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 8, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 128, "image_resolution": 1024, "batch_size": 16, "gradient_checkpointing": true, "error": "oom"}
+{"name": "0078", "latent_size": 256, "image_resolution": 2048, "batch_size": 8, "gradient_checkpointing": false, "error": "oom"}
+{"name": "0078", "latent_size": 256, "image_resolution": 2048, "batch_size": 4, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 4, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 8, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1024_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 4, "gradient_checkpointing": false, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 8, "gradient_checkpointing": true, "error": "oom"}
+{"name": "0078", "latent_size": 256, "image_resolution": 2048, "batch_size": 8, "gradient_checkpointing": true, "error": "oom"}
+{"name": "1280_dec8", "latent_size": 256, "image_resolution": 2048, "batch_size": 4, "gradient_checkpointing": true, "error": "oom"}
+{"name": "0078", "latent_size": 256, "image_resolution": 2048, "batch_size": 4, "gradient_checkpointing": true, "parameters_m": 303.708192, "step_ms": 908.227237034589, "samples_per_second": 4.404184147857332, "peak_memory_gb": 17.283886432647705}
