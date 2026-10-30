@@ -28,6 +28,7 @@ dependencies = [
     "datasets",
     "nbformat",
     "nbconvert",
+    "boto3",
 ]
 
 [project.optional-dependencies]
