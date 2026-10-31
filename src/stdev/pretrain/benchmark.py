@@ -39,6 +39,7 @@ from stdev.utils.image_tools import torch_to_cv2
 from stdev.vaes.flux_2_vae import Flux2VAE
 
 FID_PATCH_SIZE = 256
+DECODE_CHUNK_PIXELS = 16 * 512 * 512
 POLL_INTERVAL_SECONDS = 10.0
 WEIGHT_VARIANTS = ("ema", "raw")
 
@@ -100,6 +101,20 @@ def build_fid_evaluator(paths: PretrainPaths, benchmark_set: BenchmarkSet) -> FI
 
 
 @torch.no_grad()
+def decode_in_chunks(vae: Flux2VAE, latents: torch.Tensor) -> torch.Tensor:
+    """
+    Decodes in chunks of at most DECODE_CHUNK_PIXELS output pixels.
+    returns:
+        images: [B, 3, H, W], pixel_values: [0...1], dtype: torch.float32
+    """
+    pixels_per_image = latents.shape[-2] * latents.shape[-1] * 64
+    chunk_size = max(1, DECODE_CHUNK_PIXELS // pixels_per_image)
+    return torch.cat(
+        [vae.decode(chunk).float().clamp(0, 1) for chunk in latents.split(chunk_size)]
+    )
+
+
+@torch.no_grad()
 def evaluate_weights(
     model: torch.nn.Module,
     vae: Flux2VAE,
@@ -126,7 +141,7 @@ def evaluate_weights(
             features,
             ~torch.isnan(features),
         )
-        images_high = vae.decode(latents_high).float().clamp(0, 1)  # [B, 3, H, W]
+        images_high = decode_in_chunks(vae, latents_high)  # [B, 3, H, W]
         fid_evaluator.update(images_high)
         images_low = benchmark_set.load_low_resolution_images(indices).to(device)
         downscaled = functional.avg_pool2d(images_high, 2)

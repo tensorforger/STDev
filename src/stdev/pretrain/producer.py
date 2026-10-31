@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Event
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import aiohttp
 import cv2
@@ -39,6 +40,7 @@ from stdev.pretrain.config import (
     DOWNLOAD_CONCURRENCY_PER_PROCESS,
     DOWNLOAD_PROCESSES,
     ENCODE_BATCH_SIZE,
+    ENCODE_CHUNK_PIXELS,
     EVICTION_INTERVAL_SECONDS,
     IMAGE_QUEUE_SIZE,
     MAX_CONNECTIONS_PER_HOST,
@@ -59,6 +61,9 @@ from stdev.pretrain.config import (
 )
 from stdev.pretrain.high_frequency import compute_feature_vector
 from stdev.pretrain.sources import SourcePosition, iterate_jobs
+
+if TYPE_CHECKING:
+    from stdev.vaes.flux_2_vae import Flux2VAE
 
 QUEUE_TIMEOUT_SECONDS = 1.0
 STATE_SAVE_INTERVAL_SECONDS = 30.0
@@ -247,6 +252,22 @@ def images_to_tensor(images: list[np.ndarray], device: torch.device) -> torch.Te
     return stacked.permute(0, 3, 1, 2).float().div(255.0)
 
 
+def encode_in_chunks(vae: "Flux2VAE", images: list[np.ndarray], device: torch.device) -> torch.Tensor:
+    """
+    Encodes in chunks of at most ENCODE_CHUNK_PIXELS pixels (fixed chunk size per resolution).
+    returns:
+        latents: [B, 32, H / 8, W / 8]
+    """
+    height, width = images[0].shape[:2]
+    chunk_size = max(1, ENCODE_CHUNK_PIXELS // (height * width))
+    return torch.cat(
+        [
+            vae.encode(images_to_tensor(images[start : start + chunk_size], device))
+            for start in range(0, len(images), chunk_size)
+        ]
+    )
+
+
 def run_encoder_worker(
     gpu_index: int,
     sample_queue: multiprocessing.Queue,
@@ -324,8 +345,8 @@ def run_encoder_worker(
         images_low = [sample["image_low"] for sample in batch]
         images_high += [images_high[-1]] * padding
         images_low += [images_low[-1]] * padding
-        latents_high = vae.encode(images_to_tensor(images_high, device))[: len(batch)]
-        latents_low = vae.encode(images_to_tensor(images_low, device))[: len(batch)]
+        latents_high = encode_in_chunks(vae, images_high, device)[: len(batch)]
+        latents_low = encode_in_chunks(vae, images_low, device)[: len(batch)]
         text_embedding = text_encoder.encode_text_batch(
             [sample["caption"] for sample in batch]
         ).float().mean(dim=1)  # [B, 768]

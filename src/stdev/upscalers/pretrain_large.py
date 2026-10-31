@@ -400,6 +400,7 @@ def sample_high_resolution_latents(
     sigma_shift: float = SAMPLING_SIGMA_SHIFT,
     seed: int = INFERENCE_SEED,
     dtype: torch.dtype = INFERENCE_DTYPE,
+    noise: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Euler sampling of the flow from noise to the high resolution latents.
@@ -410,17 +411,21 @@ def sample_high_resolution_latents(
         text_mask: [B], dtype: torch.bool
         high_frequency_features: [B, HIGH_FREQUENCY_FEATURE_COUNT]
         high_frequency_mask: [B, HIGH_FREQUENCY_FEATURE_COUNT], dtype: torch.bool
+        noise: [B, C, H * SCALE_FACTOR, W * SCALE_FACTOR] initial noise, drawn from `seed` if None
     returns:
         latents: [B, C, H * SCALE_FACTOR, W * SCALE_FACTOR], dtype: torch.float32
     """
     batch_size, channels, height, width = latents_low_resolution.shape
     device = latents_low_resolution.device
-    generator = torch.Generator(device=device).manual_seed(seed)
-    latents = torch.randn(
-        (batch_size, channels, height * SCALE_FACTOR, width * SCALE_FACTOR),
-        generator=generator,
-        device=device,
-    )  # [B, C, H_hr, W_hr], dtype: torch.float32
+    if noise is None:
+        generator = torch.Generator(device=device).manual_seed(seed)
+        latents = torch.randn(
+            (batch_size, channels, height * SCALE_FACTOR, width * SCALE_FACTOR),
+            generator=generator,
+            device=device,
+        )  # [B, C, H_hr, W_hr], dtype: torch.float32
+    else:
+        latents = noise.to(device, torch.float32)
     latents_low_resolution = latents_low_resolution.to(dtype)
     text_embedding = text_embedding.to(dtype)
     sampling_sigmas = shift_sigmas(
