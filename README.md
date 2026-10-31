@@ -44,6 +44,26 @@ torchrun --standalone --nproc_per_node=8 scripts/generate_flux_dataset.py
 Without `torchrun` the script runs on a single GPU (`python scripts/generate_flux_dataset.py`). Use `CUDA_VISIBLE_DEVICES` with a smaller `--nproc_per_node` to use a subset of GPUs.
 
 
+### Upload checkpoints to S3 (Cloudflare R2)
+
+Put credentials in `.env` at the repo root (gitignored):
+
+```bash
+S3_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com
+S3_ACCESS_KEY_ID=<access key id>
+S3_SECRET_ACCESS_KEY=<sha256 of the R2 API token value>
+```
+
+```bash
+# newest checkpoint under pretrain_runs/ -> s3://checkpoints/<run_name>/<checkpoint>.pt
+python scripts/upload_checkpoint.py
+# newest checkpoint of a specific run, or an exact file / bucket / key
+python scripts/upload_checkpoint.py pretrain_runs/stage1_v1
+python scripts/upload_checkpoint.py pretrain_runs/stage1_v1/checkpoints/checkpoint_000056599.pt --bucket checkpoints --key stage1_v1/final.pt
+```
+
+Uploads are skipped if an object with the same key and size already exists (`--force` to overwrite).
+
 ## License
 
 See [LICENSE](LICENSE). Datasets and model weights are subject to their own licenses.
