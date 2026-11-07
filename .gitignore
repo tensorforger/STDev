@@ -1,4 +1,5 @@
 rqi/
+dev/
 
 .vscode/
 local_samples/
@@ -8,6 +9,9 @@ results/*fast/
 # Weights
 models/
 trained_models/
+pretrain_runs/
+distill_runs/
+sft_runs/
 
 # Dataset
 datasets/

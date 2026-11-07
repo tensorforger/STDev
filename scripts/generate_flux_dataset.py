@@ -1,4 +1,19 @@
+"""
+Generates the FLUX.2-klein-4B teacher dataset for SFT of the pretrain_large latent upscaler:
+samples the teacher at each configured resolution bucket (`stdev.sft.config.RESOLUTION_BUCKETS`),
+decodes the high resolution image, re-encodes its bilinear 2x downscale and measures the high
+frequency features of the decoded image. Each sample is written as one `.vz.safetensors` block
+(`latents_orig`, `latents_div_2`, `text_embedding` [pooled SDXL embedding], `high_frequency_raw`)
+in its bucket's directory. `--benchmark` instead writes the older fixed resolution image /
+prompt_embeds benchmark set used by scripts/run_benchmark.py.
+
+Usage: torchrun --standalone --nproc_per_node=8 scripts/generate_flux_dataset.py
+           torchrun --standalone --nproc_per_node=8 scripts/generate_flux_dataset.py --benchmark
+           python scripts/generate_flux_dataset.py --smoke   (tiny dataset for a quick check)
+"""
+
 import argparse
+import dataclasses
 import json
 import os
 import random
@@ -13,34 +28,34 @@ from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
 from tqdm import tqdm
 from transformers import Qwen2TokenizerFast, Qwen3ForCausalLM
 
+from stdev.pretrain.high_frequency import compute_feature_vector
+from stdev.sft.config import (
+    BASE_PROMPTS_PATH,
+    BENCHMARK_DIRECTORY,
+    BENCHMARK_IMAGE_SIZE,
+    BENCHMARK_SEED_OFFSET,
+    BUCKET_SEED_STRIDE,
+    DATASET_DIRECTORY as DEFAULT_DATASET_DIRECTORY,
+    FLUX_MODEL_DIRECTORY,
+    LATENT_CHANNELS,
+    MAX_SEQUENCE_LENGTH,
+    MODIFIERS_PATH,
+    NUM_BENCHMARK_SAMPLES,
+    NUM_INFERENCE_STEPS,
+    PROMPT_EMBEDS_CODEC,
+    RESOLUTION_BUCKETS,
+    SDXL_DIRECTORY,
+    TEXT_ENCODER_OUTPUT_LAYERS,
+    VAE_SPATIAL_COMPRESSION,
+    ResolutionBucket,
+)
+from stdev.sft.data import block_path, write_block
 from stdev.text_encoders.sdxl_text_encoder import SDXLTextEncoder
 from stdev.utils.image_tools import resize_torch, torch_to_cv2
 from stdev.vaes.flux_2_vae import Flux2VAE
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-MODEL_DIRECTORY = REPOSITORY_ROOT / "models" / "FLUX.2-klein-4B"
-SDXL_DIRECTORY = REPOSITORY_ROOT / "models" / "stable-diffusion-xl-base-1.0"
-BASE_PROMPTS_PATH = REPOSITORY_ROOT / "prompts" / "base_prompts.json"
-MODIFIERS_PATH = REPOSITORY_ROOT / "prompts" / "modifiers.json"
-OUTPUT_DIRECTORY = REPOSITORY_ROOT / "train_datasets" / "flux_1024_20k"
-BENCHMARK_DIRECTORY = REPOSITORY_ROOT / "benchmark_datasets" / "flux_1024"
-
-NUM_BLOCKS = 20_000
-NUM_BENCHMARK_SAMPLES = 1000
-BENCHMARK_SEED_OFFSET = 1_000_000
-BATCH_SIZE = 1
-BASE_SEED = 0
-IMAGE_SIZE = 1024
-NUM_INFERENCE_STEPS = 4
-SINGLE_BLOCK_INDEX = 15
-MAX_SEQUENCE_LENGTH = 512
-TEXT_ENCODER_OUTPUT_LAYERS = (9, 18, 27)
-LATENT_CHANNELS = 32
-VAE_SPATIAL_COMPRESSION = 8
-LATENT_CODEC = "lbrq_8bit"
-ACTIVATION_CODEC = "lbrq_4bit"
-PROMPT_EMBEDS_CODEC = "cast_fp16"
 DTYPE = torch.bfloat16
+SMOKE_BLOCKS_PER_BUCKET = 2
 
 RANK = int(os.environ.get("RANK", 0))
 WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 1))
@@ -53,7 +68,18 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark",
         action="store_true",
-        help="Generate the benchmark dataset instead of the training blocks.",
+        help="Generate the fixed resolution benchmark set instead of the training blocks.",
+    )
+    parser.add_argument(
+        "--output-directory",
+        type=Path,
+        default=None,
+        help="Overrides the training blocks directory (default: stdev.sft.config.DATASET_DIRECTORY).",
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help=f"Generate only {SMOKE_BLOCKS_PER_BUCKET} blocks per bucket, for a quick check.",
     )
     return parser.parse_args()
 
@@ -70,10 +96,6 @@ def build_block_specification(seed: int, base_prompts: list[str], modifiers: lis
     base_prompt = random_generator.choice(base_prompts)
 
     return {"model_prompt": f"{modifier} {base_prompt}", "seed": seed}
-
-
-def get_block_path(block_index: int) -> Path:
-    return OUTPUT_DIRECTORY / f"block_{block_index:06d}.vz.safetensors"
 
 
 @torch.no_grad()
@@ -169,27 +191,46 @@ def compute_empirical_mu(image_sequence_length: int, num_steps: int) -> float:
     return float(slope * num_steps + intercept)
 
 
+def compute_high_frequency_batch(image: torch.Tensor) -> torch.Tensor:
+    """
+    args:
+        image: [B, 3, H, W], channel_order: RGB, pixel_values: [0...1]
+    returns:
+        high_frequency_raw: [B, 4], raw (not quantile normalized) feature values, dtype: float32
+    """
+    features = [
+        compute_feature_vector(torch_to_cv2(image[index : index + 1]))
+        for index in range(image.shape[0])
+    ]
+    return torch.from_numpy(np.stack(features)).float()
+
+
 @torch.no_grad()
-def generate_blocks(
+def generate_samples(
     specifications: list[dict],
     text_encoder: Qwen3ForCausalLM,
     tokenizer: Qwen2TokenizerFast,
     transformer: Flux2Transformer2DModel,
     scheduler: FlowMatchEulerDiscreteScheduler,
     vae: Flux2VAE,
-    captured_activations: dict[str, torch.Tensor],
     sdxl_text_encoder: SDXLTextEncoder,
+    height: int,
+    width: int,
 ) -> dict[str, torch.Tensor]:
     """
+    Teacher generation at one target resolution: samples the FLUX.2 model, decodes the high
+    resolution image, re-encodes its bilinear 2x downscale and measures its high frequency
+    features.
+
     returns:
-        prompt_embeds: [B, 77, 768], dtype: torch.float32, SDXL text encoder embeddings
-        init_latents: [B, 32, H/8, W/8], dtype: torch.bfloat16
-        latents_orig: [B, 32, H/8, W/8], dtype: torch.bfloat16
-        latents_div_2: [B, 32, H/16, W/16], dtype: torch.bfloat16
-        activations_grid: [B, inner_dim, H/16, W/16], dtype: torch.bfloat16
+        sdxl_prompt_embeds: [B, 77, 768], dtype: torch.float32, full SDXL sequence embeddings
+        latents_orig: [B, 32, height/8, width/8], dtype: torch.bfloat16
+        latents_div_2: [B, 32, height/16, width/16], dtype: torch.bfloat16
+        high_frequency_raw: [B, 4], dtype: torch.float32
     """
     batch_size = len(specifications)
-    packed_size = IMAGE_SIZE // (VAE_SPATIAL_COMPRESSION * 2)
+    packed_height = height // (VAE_SPATIAL_COMPRESSION * 2)
+    packed_width = width // (VAE_SPATIAL_COMPRESSION * 2)
     patchified_channels = LATENT_CHANNELS * 4
 
     prompt_embeds, text_ids = encode_prompts(
@@ -203,19 +244,17 @@ def generate_blocks(
         generator = torch.Generator(device=DEVICE).manual_seed(specification["seed"])
         noise_items.append(
             torch.randn(
-                (1, patchified_channels, packed_size, packed_size),
+                (1, patchified_channels, packed_height, packed_width),
                 generator=generator,
                 device=DEVICE,
                 dtype=DTYPE,
             )
         )
     noise = torch.cat(noise_items, dim=0)  # [B, 128, H/16, W/16]
-    latents = noise.reshape(batch_size, patchified_channels, packed_size * packed_size).permute(
+    latents = noise.reshape(batch_size, patchified_channels, packed_height * packed_width).permute(
         0, 2, 1
     )  # [B, H*W/256, 128]
-    latent_ids = build_latent_ids(batch_size, packed_size, packed_size)
-
-    init_latents = vae.unpatchify_latents(noise)
+    latent_ids = build_latent_ids(batch_size, packed_height, packed_width)
 
     sigmas = np.linspace(1.0, 1 / NUM_INFERENCE_STEPS, NUM_INFERENCE_STEPS)
     mu = compute_empirical_mu(image_sequence_length=latents.shape[1], num_steps=NUM_INFERENCE_STEPS)
@@ -235,48 +274,43 @@ def generate_blocks(
         )[0]
         latents = scheduler.step(noise_prediction, timestep, latents, return_dict=False)[0]
 
-    num_text_tokens = prompt_embeds.shape[1]
-    block_activations = captured_activations["hidden_states"][:, num_text_tokens:, :]
-    activations_grid = unpack_latents(block_activations, packed_size, packed_size)
+    latents_orig = vae.unpatchify_latents(unpack_latents(latents, packed_height, packed_width))
 
-    latents_orig = vae.unpatchify_latents(unpack_latents(latents, packed_size, packed_size))
-
-    image = vae.decode(latents_orig)
+    image = vae.decode(latents_orig).float().clamp(0, 1)
     image_div_2 = resize_torch(
-        image, height=IMAGE_SIZE // 2, width=IMAGE_SIZE // 2, interpolation="bilinear"
+        image, height=height // 2, width=width // 2, interpolation="bilinear"
     )
     latents_div_2 = vae.encode(image_div_2)
 
     sdxl_prompt_embeds = sdxl_text_encoder.encode_text_batch(
         [specification["model_prompt"] for specification in specifications]
-    )
+    ).float()
 
     return {
-        "prompt_embeds": sdxl_prompt_embeds.float(),
-        "init_latents": init_latents,
+        "sdxl_prompt_embeds": sdxl_prompt_embeds,
         "latents_orig": latents_orig,
         "latents_div_2": latents_div_2,
-        "activations_grid": activations_grid,
+        "high_frequency_raw": compute_high_frequency_batch(image),
     }
 
 
-def save_block(block_index: int, tensors: dict[str, torch.Tensor], item_index: int) -> None:
-    safetensors_path = get_block_path(block_index)
-    codecs = {
-        "prompt_embeds": PROMPT_EMBEDS_CODEC,
-        "init_latents": LATENT_CODEC,
-        "latents_orig": LATENT_CODEC,
-        "latents_div_2": LATENT_CODEC,
-        "activations_grid": ACTIVATION_CODEC,
-    }
-    encoded_tensors = {
-        name: vaezip.encode(tensors[name][item_index : item_index + 1], codec=codec)
-        for name, codec in codecs.items()
-    }
-
-    temporary_path = safetensors_path.with_name(safetensors_path.name + ".tmp")
-    vaezip.save(encoded_tensors, path=temporary_path)
-    os.replace(temporary_path, safetensors_path)
+def save_training_block(
+    dataset_directory: Path,
+    bucket: ResolutionBucket,
+    block_index: int,
+    tensors: dict[str, torch.Tensor],
+    item_index: int,
+) -> None:
+    pooled_text_embedding = tensors["sdxl_prompt_embeds"][item_index : item_index + 1].mean(dim=1)
+    write_block(
+        dataset_directory,
+        bucket,
+        block_index,
+        latents_orig=tensors["latents_orig"][item_index : item_index + 1],
+        latents_div_2=tensors["latents_div_2"][item_index : item_index + 1],
+        text_embedding=pooled_text_embedding,
+        high_frequency_raw=tensors["high_frequency_raw"][item_index : item_index + 1],
+    )
 
 
 def get_benchmark_paths(sample_index: int) -> tuple[Path, Path]:
@@ -287,20 +321,20 @@ def get_benchmark_paths(sample_index: int) -> tuple[Path, Path]:
     )
 
 
-@torch.no_grad()
 def save_benchmark_sample(
-    sample_index: int, tensors: dict[str, torch.Tensor], item_index: int, vae: Flux2VAE
+    sample_index: int, tensors: dict[str, torch.Tensor], item_index: int
 ) -> None:
     """
     args:
-        tensors: output of generate_blocks()
+        tensors: output of generate_samples(), with an extra "decoded_image" entry
+            ([B, 3, H, W], channel_order: RGB, pixel_values: [0...1])
     """
     image_path, prompt_embeds_path = get_benchmark_paths(sample_index)
-    latents = tensors["latents_orig"][item_index : item_index + 1]  # [1, 32, H/8, W/8]
-    image = vae.decode(latents).float().clamp(0, 1)
-    cv2.imwrite(str(image_path), torch_to_cv2(image))
+    cv2.imwrite(
+        str(image_path), torch_to_cv2(tensors["decoded_image"][item_index : item_index + 1])
+    )
     vaezip.save_tensor(
-        tensors["prompt_embeds"][item_index : item_index + 1],
+        tensors["sdxl_prompt_embeds"][item_index : item_index + 1],
         prompt_embeds_path,
         codec=PROMPT_EMBEDS_CODEC,
     )
@@ -310,53 +344,57 @@ def main() -> None:
     torch.cuda.set_device(DEVICE)
     arguments = parse_arguments()
     benchmark_mode = arguments.benchmark
-    output_directory = BENCHMARK_DIRECTORY if benchmark_mode else OUTPUT_DIRECTORY
-    if benchmark_mode:
-        (BENCHMARK_DIRECTORY / "images").mkdir(parents=True, exist_ok=True)
-        (BENCHMARK_DIRECTORY / "prompt_embeds").mkdir(parents=True, exist_ok=True)
-    else:
-        output_directory.mkdir(parents=True, exist_ok=True)
+    dataset_directory = arguments.output_directory or DEFAULT_DATASET_DIRECTORY
+    resolution_buckets = RESOLUTION_BUCKETS
+    if arguments.smoke:
+        resolution_buckets = tuple(
+            dataclasses.replace(bucket, num_blocks=SMOKE_BLOCKS_PER_BUCKET)
+            for bucket in RESOLUTION_BUCKETS
+        )
     base_prompts, modifiers = load_prompt_sources()
 
     if benchmark_mode:
-        item_indices = range(1, NUM_BENCHMARK_SAMPLES + 1)
-        seed_offset = BENCHMARK_SEED_OFFSET
-        is_done = lambda index: all(path.exists() for path in get_benchmark_paths(index))
+        (BENCHMARK_DIRECTORY / "images").mkdir(parents=True, exist_ok=True)
+        (BENCHMARK_DIRECTORY / "prompt_embeds").mkdir(parents=True, exist_ok=True)
+        num_benchmark_samples = (
+            SMOKE_BLOCKS_PER_BUCKET if arguments.smoke else NUM_BENCHMARK_SAMPLES
+        )
+        all_items: list[tuple[ResolutionBucket | None, int]] = [
+            (None, index) for index in range(1, num_benchmark_samples + 1)
+        ]
+        is_done = lambda item: all(path.exists() for path in get_benchmark_paths(item[1]))
     else:
-        item_indices = range(1, NUM_BLOCKS + 1)
-        seed_offset = BASE_SEED
-        is_done = lambda index: get_block_path(index).exists()
+        for bucket in resolution_buckets:
+            (dataset_directory / bucket.name).mkdir(parents=True, exist_ok=True)
+        all_items = [
+            (bucket, block_index)
+            for bucket in resolution_buckets
+            for block_index in range(1, bucket.num_blocks + 1)
+        ]
+        is_done = lambda item: block_path(dataset_directory, item[0], item[1]).exists()
 
-    # Each rank takes a fixed stride of the full index range, so ranks never overlap
-    # regardless of which files already exist when they start.
-    pending_indices = [index for index in item_indices[RANK::WORLD_SIZE] if not is_done(index)]
-    if not pending_indices:
-        print(f"[rank {RANK}] Everything already exists in {output_directory}")
+    # Each rank takes a fixed stride of the full item list, so ranks never overlap regardless of
+    # which files already exist when they start.
+    pending_items = [item for item in all_items[RANK::WORLD_SIZE] if not is_done(item)]
+    if not pending_items:
+        print(f"[rank {RANK}] Everything already exists", flush=True)
         return
 
     text_encoder = Qwen3ForCausalLM.from_pretrained(
-        MODEL_DIRECTORY / "text_encoder", local_files_only=True, dtype=DTYPE
+        FLUX_MODEL_DIRECTORY / "text_encoder", local_files_only=True, dtype=DTYPE
     ).to(DEVICE)
     tokenizer = Qwen2TokenizerFast.from_pretrained(
-        MODEL_DIRECTORY / "tokenizer", local_files_only=True
+        FLUX_MODEL_DIRECTORY / "tokenizer", local_files_only=True
     )
-    scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_DIRECTORY / "scheduler")
+    scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(FLUX_MODEL_DIRECTORY / "scheduler")
     transformer = Flux2Transformer2DModel.from_pretrained(
-        MODEL_DIRECTORY / "transformer", torch_dtype=DTYPE
+        FLUX_MODEL_DIRECTORY / "transformer", torch_dtype=DTYPE
     ).to(DEVICE)
-    vae = Flux2VAE(str(MODEL_DIRECTORY / "vae"), device=DEVICE, dtype=DTYPE)
+    vae = Flux2VAE(str(FLUX_MODEL_DIRECTORY / "vae"), device=DEVICE, dtype=DTYPE)
     sdxl_text_encoder = SDXLTextEncoder(str(SDXL_DIRECTORY), device=DEVICE, dtype=torch.float32)
 
     text_encoder.eval()
     transformer.eval()
-
-    # The hook stays registered for the whole run so the compiled graph is not invalidated.
-    captured_activations: dict[str, torch.Tensor] = {}
-
-    def capture_hook(module, module_inputs, module_output):
-        captured_activations["hidden_states"] = module_output
-
-    transformer.single_transformer_blocks[SINGLE_BLOCK_INDEX].register_forward_hook(capture_hook)
 
     text_encoder.model = torch.compile(text_encoder.model)
     transformer = torch.compile(transformer)
@@ -364,30 +402,33 @@ def main() -> None:
     vae.model.decoder = torch.compile(vae.model.decoder)
 
     with tqdm(
-        total=len(pending_indices), desc=f"Generating blocks [rank {RANK}]", position=RANK
+        total=len(pending_items), desc=f"Generating [rank {RANK}]", position=RANK
     ) as progress_bar:
-        for batch_start in range(0, len(pending_indices), BATCH_SIZE):
-            batch_indices = pending_indices[batch_start : batch_start + BATCH_SIZE]
-            specifications = [
-                build_block_specification(seed_offset + block_index, base_prompts, modifiers)
-                for block_index in batch_indices
-            ]
-            tensors = generate_blocks(
-                specifications,
+        for bucket, item_index in pending_items:
+            if benchmark_mode:
+                height = width = BENCHMARK_IMAGE_SIZE
+                seed = BENCHMARK_SEED_OFFSET + item_index
+            else:
+                height, width = bucket.height, bucket.width
+                seed = resolution_buckets.index(bucket) * BUCKET_SEED_STRIDE + item_index
+            specification = build_block_specification(seed, base_prompts, modifiers)
+            tensors = generate_samples(
+                [specification],
                 text_encoder,
                 tokenizer,
                 transformer,
                 scheduler,
                 vae,
-                captured_activations,
                 sdxl_text_encoder,
+                height,
+                width,
             )
-            for item_index, block_index in enumerate(batch_indices):
-                if benchmark_mode:
-                    save_benchmark_sample(block_index, tensors, item_index, vae)
-                else:
-                    save_block(block_index, tensors, item_index)
-            progress_bar.update(len(batch_indices))
+            if benchmark_mode:
+                tensors["decoded_image"] = vae.decode(tensors["latents_orig"]).float().clamp(0, 1)
+                save_benchmark_sample(item_index, tensors, 0)
+            else:
+                save_training_block(dataset_directory, bucket, item_index, tensors, 0)
+            progress_bar.update(1)
 
 
 if __name__ == "__main__":
