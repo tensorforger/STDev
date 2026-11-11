@@ -6,7 +6,6 @@ teacher pair shards and the training stream over the pairs of one round.
 
 import json
 import random
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -159,9 +158,8 @@ class PairShard:
     seeds: list[int]
 
 
-def write_pair_shard(directory: Path, writer_name: str, shard: PairShard, captions: list[str]) -> Path:
-    stem = f"{time.time_ns()}_{writer_name}"
-    (directory / f"{stem}.json").write_text(json.dumps({"seeds": shard.seeds, "captions": captions}))
+def write_pair_shard(directory: Path, stem: str, shard: PairShard, metadata: dict) -> Path:
+    (directory / f"{stem}.json").write_text(json.dumps({"seeds": shard.seeds, **metadata}))
     temporary_path = directory / f".{stem}.tmp"
     vaezip.save(
         {
@@ -172,7 +170,9 @@ def write_pair_shard(directory: Path, writer_name: str, shard: PairShard, captio
                 shard.high_frequency_features.float(), codec="cast_fp32"
             ),
             "text_mask": vaezip.encode(shard.text_mask.float()[:, None], codec="cast_fp32"),
-            "high_frequency_mask": vaezip.encode(shard.high_frequency_mask.float(), codec="cast_fp32"),
+            "high_frequency_mask": vaezip.encode(
+                shard.high_frequency_mask.float(), codec="cast_fp32"
+            ),
         },
         path=temporary_path,
     )
@@ -200,9 +200,22 @@ def list_pair_shards(directory: Path) -> list[Path]:
     return sorted(directory.glob(f"*{PAIR_SUFFIX}"))
 
 
+def list_bucket_pair_shards(directory: Path) -> list[Path]:
+    return sorted(directory.glob(f"*/*{PAIR_SUFFIX}"))
+
+
+def shard_pair_count(path: Path) -> int:
+    sidecar_path = path.with_name(path.name.removesuffix(PAIR_SUFFIX) + ".json")
+    return len(json.loads(sidecar_path.read_text())["seeds"])
+
+
 def count_pairs(directory: Path) -> int:
     return sum(
-        len(json.loads(path.with_name(path.name.removesuffix(PAIR_SUFFIX) + ".json").read_text())["seeds"])
+        len(
+            json.loads(path.with_name(path.name.removesuffix(PAIR_SUFFIX) + ".json").read_text())[
+                "seeds"
+            ]
+        )
         for path in list_pair_shards(directory)
     )
 
@@ -228,7 +241,9 @@ class RoundPairDataset(IterableDataset):
             high_frequency_mask: [4]
         """
         worker_info = get_worker_info()
-        worker_id, worker_count = (0, 1) if worker_info is None else (worker_info.id, worker_info.num_workers)
+        worker_id, worker_count = (
+            (0, 1) if worker_info is None else (worker_info.id, worker_info.num_workers)
+        )
         pass_index = 0
         while True:
             order = list(self.shard_paths)
@@ -253,3 +268,59 @@ class RoundPairDataset(IterableDataset):
                         "high_frequency_mask": shard.high_frequency_mask[index],
                     }
             pass_index += 1
+
+
+class EpochPairDataset(IterableDataset):
+    """
+    One pass over every sample of the given pair shards. Yields micro-batches that come from a
+    single shard (so a single resolution); each loader worker mixes batches randomly from a pool
+    of pool_shards open shards.
+    """
+
+    def __init__(
+        self, shard_paths: list[Path], micro_batch_size: int, pool_shards: int, seed: int
+    ) -> None:
+        self.shard_paths = shard_paths
+        self.micro_batch_size = micro_batch_size
+        self.pool_shards = pool_shards
+        self.seed = seed
+
+    def __iter__(self) -> Iterator[dict[str, torch.Tensor]]:
+        """
+        yields:
+            latents_low: [B, C, h, w], latents_teacher: [B, C, H, W], noise: [B, C, H, W],
+            text_embedding: [B, 768], high_frequency_features: [B, 4], text_mask: [B],
+            high_frequency_mask: [B, 4]
+        """
+        worker_info = get_worker_info()
+        worker_id, worker_count = (
+            (0, 1) if worker_info is None else (worker_info.id, worker_info.num_workers)
+        )
+        order = list(self.shard_paths)
+        random.Random(self.seed).shuffle(order)
+        pending = order[worker_id::worker_count]
+        generator = random.Random(f"{self.seed}-{worker_id}")
+        active: list[tuple[PairShard, list[int]]] = []
+        while pending or active:
+            while pending and len(active) < self.pool_shards:
+                shard = read_pair_shard(pending.pop())
+                indices = list(range(len(shard.seeds)))
+                generator.shuffle(indices)
+                active.append((shard, indices))
+            position = generator.randrange(len(active))
+            shard, indices = active[position]
+            batch_indices = [indices.pop() for _ in range(min(self.micro_batch_size, len(indices)))]
+            if not indices:
+                del active[position]
+            height, width = shard.latents_teacher.shape[-2:]
+            yield {
+                "latents_low": shard.latents_low[batch_indices],
+                "latents_teacher": shard.latents_teacher[batch_indices],
+                "noise": torch.stack(
+                    [make_noise(shard.seeds[index], height, width) for index in batch_indices]
+                ),
+                "text_embedding": shard.text_embedding[batch_indices],
+                "high_frequency_features": shard.high_frequency_features[batch_indices],
+                "text_mask": shard.text_mask[batch_indices],
+                "high_frequency_mask": shard.high_frequency_mask[batch_indices],
+            }

@@ -147,5 +147,36 @@ class BucketBatchSampler:
             yield [(bucket_name, self._next_index(bucket_name)) for _ in range(self.batch_size)]
 
 
+class EpochBucketBatchSampler:
+    """
+    One pass over all blocks: single-bucket batches in random order, incomplete batches dropped.
+    """
+
+    def __init__(self, bucket_sizes: dict[str, int], batch_size: int, seed: int) -> None:
+        self.bucket_sizes = bucket_sizes
+        self.batch_size = batch_size
+        self.seed = seed
+        self.epoch = 0
+
+    def __len__(self) -> int:
+        return sum(size // self.batch_size for size in self.bucket_sizes.values())
+
+    def __iter__(self) -> Iterator[list[tuple[str, int]]]:
+        generator = random.Random(f"{self.seed}-{self.epoch}")
+        batches = []
+        for bucket_name, size in self.bucket_sizes.items():
+            positions = list(range(size))
+            generator.shuffle(positions)
+            for start in range(0, size - self.batch_size + 1, self.batch_size):
+                batches.append(
+                    [
+                        (bucket_name, position)
+                        for position in positions[start : start + self.batch_size]
+                    ]
+                )
+        generator.shuffle(batches)
+        yield from batches
+
+
 def collate_blocks(samples: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
     return {name: torch.stack([sample[name] for sample in samples]) for name in samples[0]}

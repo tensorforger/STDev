@@ -57,12 +57,20 @@ SEEDS_PER_ROUND = 1 << 32
 SEEDS_PER_RANK = 1 << 28
 
 
-def preprocess_job(job: tuple[SourcePosition, bytes, str]) -> tuple[SourcePosition, str, list[dict]]:
+def preprocess_job(
+    job: tuple[SourcePosition, bytes, str],
+) -> tuple[SourcePosition, str, list[dict]]:
     position, content, caption = job
-    return position, caption, preprocess_image(content, f"{position.file_index}-{position.row_offset}")
+    return (
+        position,
+        caption,
+        preprocess_image(content, f"{position.file_index}-{position.row_offset}"),
+    )
 
 
-def throttled(jobs: Iterator, semaphore: threading.Semaphore, stop_event: threading.Event) -> Iterator:
+def throttled(
+    jobs: Iterator, semaphore: threading.Semaphore, stop_event: threading.Event
+) -> Iterator:
     """
     Feeds at most the semaphore's count of jobs ahead of the consumer; ends when stop_event is set.
     """
@@ -119,7 +127,9 @@ def main() -> None:
 
     position = start_position
     pending: list[dict] = []
-    shard_parts: dict[str, list] = {name: [] for name in ("low", "teacher", "text", "features", "text_mask", "feature_mask")}
+    shard_parts: dict[str, list] = {
+        name: [] for name in ("low", "teacher", "text", "features", "text_mask", "feature_mask")
+    }
     shard_seeds: list[int] = []
     shard_captions: list[str] = []
     generated = 0
@@ -131,7 +141,7 @@ def main() -> None:
             return
         write_pair_shard(
             output_directory,
-            writer_name,
+            f"{time.time_ns()}_{writer_name}",
             PairShard(
                 torch.cat(shard_parts["low"]),
                 torch.cat(shard_parts["teacher"]),
@@ -141,7 +151,7 @@ def main() -> None:
                 torch.cat(shard_parts["feature_mask"]),
                 list(shard_seeds),
             ),
-            list(shard_captions),
+            {"captions": list(shard_captions)},
         )
         for values in shard_parts.values():
             values.clear()
@@ -156,9 +166,11 @@ def main() -> None:
         batch, pending = pending[:TEACHER_BATCH_SIZE], pending[TEACHER_BATCH_SIZE:]
         with torch.no_grad():
             latents_low = encode_in_chunks(vae, [sample["image_low"] for sample in batch], device)
-            text_embedding = text_encoder.encode_text_batch(
-                [sample["caption"] for sample in batch]
-            ).float().mean(dim=1)  # [B, 768]
+            text_embedding = (
+                text_encoder.encode_text_batch([sample["caption"] for sample in batch])
+                .float()
+                .mean(dim=1)
+            )  # [B, 768]
             raw_features = np.stack([sample["high_frequency_raw"] for sample in batch])
             features = torch.from_numpy(normalizer.normalize(raw_features)).float().to(device)
             text_mask = torch.rand(len(batch), device=device) >= TEXT_DROPOUT_PROBABILITY
@@ -212,7 +224,9 @@ def main() -> None:
         "row_offset": position.row_offset,
         "files_exhausted": position.file_index >= len(files),
     }
-    (paths.round_results(arguments.round) / f"generate_{arguments.rank}.json").write_text(json.dumps(result))
+    (paths.round_results(arguments.round) / f"generate_{arguments.rank}.json").write_text(
+        json.dumps(result)
+    )
     print(f"generate: {json.dumps(result)}", flush=True)
 
 
