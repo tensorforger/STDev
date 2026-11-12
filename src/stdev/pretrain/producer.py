@@ -262,7 +262,7 @@ def encode_in_chunks(vae: "Flux2VAE", images: list[np.ndarray], device: torch.de
     chunk_size = max(1, ENCODE_CHUNK_PIXELS // (height * width))
     return torch.cat(
         [
-            vae.encode(images_to_tensor(images[start : start + chunk_size], device))
+            vae.encode(images_to_tensor(images[start : start + chunk_size], device)).squeeze(2)
             for start in range(0, len(images), chunk_size)
         ]
     )

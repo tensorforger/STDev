@@ -110,7 +110,7 @@ def decode_in_chunks(vae: Flux2VAE, latents: torch.Tensor) -> torch.Tensor:
     pixels_per_image = latents.shape[-2] * latents.shape[-1] * 64
     chunk_size = max(1, DECODE_CHUNK_PIXELS // pixels_per_image)
     return torch.cat(
-        [vae.decode(chunk).float().clamp(0, 1) for chunk in latents.split(chunk_size)]
+        [vae.decode(chunk.unsqueeze(2)).float().clamp(0, 1) for chunk in latents.split(chunk_size)]
     )
 
 

@@ -11,7 +11,7 @@ from stdev.benchmark.dataset import BenchmarkDataset
 from stdev.upscalers.base import Upscaler
 from stdev.utils.fid import FIDEvaluator, FIDReference
 from stdev.utils.image_tools import torch_to_cv2
-from stdev.vaes.image_vae import ImageVAE
+from stdev.vaes.vae import VAE
 
 FID_PATCH_SIZE = 256
 
@@ -30,7 +30,7 @@ def resize_bilinear(image: torch.Tensor, scale: float) -> torch.Tensor:
 @torch.no_grad()
 def populate_latent_cache(
     dataset: BenchmarkDataset,
-    vae: ImageVAE,
+    vae: VAE,
     cache: LatentCache,
     scale_factor: int,
     seed: int,
@@ -45,7 +45,7 @@ def populate_latent_cache(
         image_lr_gt = resize_bilinear(image_hr_gt, 1 / scale_factor)
         for kind, image in (("hr_gt", image_hr_gt), ("lr_gt", image_lr_gt)):
             torch.manual_seed(seed)
-            cache.save_latents(kind, sample_name, vae.encode(image))
+            cache.save_latents(kind, sample_name, vae.encode(image).squeeze(2))
 
 
 def build_fid_evaluator(
@@ -89,7 +89,7 @@ def _save_image(image: torch.Tensor, path: Path) -> None:
 @torch.no_grad()
 def evaluate_quality(
     upscaler: Upscaler,
-    vae: ImageVAE,
+    vae: VAE,
     dataset: BenchmarkDataset,
     cache: LatentCache,
     fid_evaluator: FIDEvaluator,
@@ -124,7 +124,7 @@ def evaluate_quality(
         latents_hr_pred = upscaler.upscale(
             latents_lr_gt.to(upscaler_dtype), dataset.load_prompt_embeds(sample_name)
         ).float()
-        image_hr_pred = vae.decode(latents_hr_pred).float().clamp(0, 1)
+        image_hr_pred = vae.decode(latents_hr_pred.unsqueeze(2)).float().clamp(0, 1)
         image_lr_pred = resize_bilinear(image_hr_pred, 1 / scale_factor)
 
         metric_values["mse_hr_image"].append(functional.mse_loss(image_hr_pred, image_hr_gt).item())

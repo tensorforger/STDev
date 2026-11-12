@@ -12,20 +12,19 @@ uv pip install -e .
 
 ### Models
 
+Run `scripts/download_vaes.sh` (reads `HF_TOKEN` from `.env` for gated models), or run the commands below manually (after `hf auth login` for gated models).
+
 ```bash
 cd models
 
-hf download black-forest-labs/FLUX.2-klein-4B --local-dir FLUX.2-klein-4B
-hf download stabilityai/stable-diffusion-xl-base-1.0 --include "text_encoder/*" --include "tokenizer/*" --local-dir stable-diffusion-xl-base-1.0
-hf download OpenMOSS-Team/MOSS-Image-SFT --local-dir MOSS-Image-SFT
-hf download akhaliq/MOSS-Image-SFT-4-steps --local-dir MOSS-Image-SFT-4-steps
-```
-
-
-### Datasets
-```bash
-cd datasets
-git clone https://huggingface.co/datasets/refine-axis/axis-v1_1k
+hf download black-forest-labs/FLUX.2-klein-4B --include "vae/*" --local-dir FLUX.2-klein-4B
+hf download madebyollin/texture-fix-vae-for-qwen-image-2.1 --include "config.json" "diffusion_pytorch_model.safetensors" --local-dir texture-fix-vae-for-qwen-image-2.1
+hf download stabilityai/sdxl-vae --include "config.json" "diffusion_pytorch_model.safetensors" --local-dir sdxl-vae
+hf download black-forest-labs/FLUX.1-schnell --include "vae/*" --local-dir FLUX.1-schnell
+hf download stabilityai/stable-diffusion-3.5-large --include "vae/*" --local-dir stable-diffusion-3.5-large
+hf download Wan-AI/Wan2.1-T2V-1.3B-Diffusers --include "vae/*" --local-dir Wan2.1-T2V-1.3B-Diffusers
+hf download Lightricks/LTX-2.5-Diffusers --include "vae/*" --local-dir LTX-2.5-Diffusers
+hf download MiniMaxAI/MiniMax-H3 --include "vae/*" --local-dir MiniMax-H3
 ```
 
 ## Usage

@@ -276,12 +276,11 @@ def generate_samples(
 
     latents_orig = vae.unpatchify_latents(unpack_latents(latents, packed_height, packed_width))
 
-    image = vae.decode(latents_orig).float().clamp(0, 1)
+    image = vae.decode(latents_orig.unsqueeze(2)).float().clamp(0, 1)
     image_div_2 = resize_torch(
         image, height=height // 2, width=width // 2, interpolation="bilinear"
     )
-    latents_div_2 = vae.encode(image_div_2)
-
+    latents_div_2 = vae.encode(image_div_2).squeeze(2)
     sdxl_prompt_embeds = sdxl_text_encoder.encode_text_batch(
         [specification["model_prompt"] for specification in specifications]
     ).float()
@@ -424,7 +423,9 @@ def main() -> None:
                 width,
             )
             if benchmark_mode:
-                tensors["decoded_image"] = vae.decode(tensors["latents_orig"]).float().clamp(0, 1)
+                tensors["decoded_image"] = (
+                    vae.decode(tensors["latents_orig"].unsqueeze(2)).float().clamp(0, 1)
+                )
                 save_benchmark_sample(item_index, tensors, 0)
             else:
                 save_training_block(dataset_directory, bucket, item_index, tensors, 0)

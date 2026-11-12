@@ -29,6 +29,9 @@ dependencies = [
     "nbformat",
     "nbconvert",
     "boto3",
+    "cpbd-py312",
+    "yt-dlp",
+    "selenium",
 ]
 
 [project.optional-dependencies]

@@ -64,6 +64,6 @@ class Pipeline:
                 conditioning=conditioning,
             )
 
-        image = self.vae.decode(latents=latents)
+        image = self.vae.decode(latents=latents.unsqueeze(2))
 
         return image

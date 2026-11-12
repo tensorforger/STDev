@@ -1,0 +1,47 @@
+dataset_name: strf-128h
+general:
+  filename_prefix: STRF
+  raw_videos_source: null
+  width: 1024
+  height: 1024
+  clip_fps: 24
+  clip_frames: 129
+to_source_urls:
+  channel_urls: [
+    https://vkvideo.ru/@moscow_walker/all,
+    https://vkvideo.ru/@club226973819/all,
+    https://vkvideo.ru/@garage__54,
+    https://vkvideo.ru/@svoimxodom/all,
+    https://vkvideo.ru/@bnbproduction/all,
+    https://vkvideo.ru/@pognalishow/all,
+    https://vkvideo.ru/@danik_officialgroup/all,
+    https://vkvideo.ru/@club238513234/all,
+    https://vkvideo.ru/@club233682527/all,
+    https://vkvideo.ru/@club228981117/all,
+    https://vkvideo.ru/@novgorirk/all,
+    https://vkvideo.ru/@sibirtrofersomsk/all,
+    https://vkvideo.ru/@nikitos_1000/all,
+    https://vkvideo.ru/@club232633320/all,
+    https://vkvideo.ru/@youtube_repost/all,
+    https://vkvideo.ru/@clubyfrosta/all,
+    https://vkvideo.ru/@onlybfy/all,
+    https://vkvideo.ru/@backinmay/all,
+    https://vkvideo.ru/@yurkavolkov/all,
+    https://vkvideo.ru/@ytprtyt4/all,
+    https://vkvideo.ru/@kawaiisuki/all,
+    https://vkvideo.ru/@aot_mem/all,
+    https://vkvideo.ru/@memphisdesu/all
+  ]
+  max_links_per_channel: 20
+cut_videos:
+  skip_start_pct: 0.05
+  skip_end_pct: 0.1
+  max_clips_per_video: 350
+  max_total_hours: 128
+  frame_stride: 1
+  num_workers: 2
+storage:
+  stored_directories: [
+    videos,
+    metadata
+  ]
