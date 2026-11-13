@@ -65,6 +65,12 @@ Test of the hypothesis "one model for many VAEs": 53M UNet with shared core and 
 - Caveats: single runs got ~10% more steps, evaluation on a training shard, both settings are undertrained (most are still worse than bilinear).
 - Decision: train separate models from scratch for every VAE.
 
+### 7. VAE implementation priority list
+
+Asked two agents for deep research on what VAEs should be implementd fist. More detailed analysis: `reports/prioritized_vaes_by_demand_qwen.md`
+
+Summarizing it, we should start from **Wan2.1-VAE**, then **MiniMax-H3 VisualVAE** and **Qwen-Image-2.1 VAE**. 
+
 ## Open problems
 
 - Pretrain phase 2 progress and forgetting of lower resolutions (data limited and sequential schedule).
@@ -75,8 +81,9 @@ Test of the hypothesis "one model for many VAEs": 53M UNet with shared core and 
 
 ## Plan
 
-1. Separate model per VAE, each trained from scratch (the universal shared-core model lost to per-VAE models on every VAE, see history 6). The universal model is shelved.
+1. Separate model per VAE, each trained from scratch (the universal shared-core model lost to per-VAE models on every VAE). The universal model is shelved. 
    - Reuse the same architecture and recipe for all VAEs, only adapting channel counts and video handling.
+   - Implement VAE upscalers in optimal order (`reports/prioritized_vaes_by_demand_qwen.md`)
 2. Pretrain the new base models from scratch:
    - more training than before,
    - no prompt conditioning,
