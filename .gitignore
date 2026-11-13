@@ -12,6 +12,7 @@ trained_models/
 pretrain_runs/
 distill_runs/
 sft_runs/
+multi_vae_runs/
 
 # Dataset
 datasets/
