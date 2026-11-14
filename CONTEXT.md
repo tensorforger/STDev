@@ -76,8 +76,7 @@ Summarizing it, we should start from **Wan2.1-VAE**, then **MiniMax-H3 VisualVAE
 - Pretrain phase 2 progress and forgetting of lower resolutions (data limited and sequential schedule).
 - Only FLUX.2 latents are covered so far; per-VAE models are not yet trained at full scale.
 - Per-VAE models multiply the training cost; the recipe must be cheap or reusable across VAEs.
-- The small 53M model is still worse than bilinear for most VAEs after ~6k steps.
-- Condition design: text is nearly useless, 4 HF features reduce to ~1 effective feature.
+- Condition design: text is nearly useless, 4 HF features reduce to ~1 effective feature. Need to test the 1 feature at scale.
 
 ## Plan
 
