@@ -13,6 +13,7 @@ pretrain_runs/
 distill_runs/
 sft_runs/
 multi_vae_runs/
+stored_models/
 
 # Dataset
 datasets/
