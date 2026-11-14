@@ -1,7 +1,7 @@
-dataset_name: strf-128h
+# dataset_name should be a valid s3 bucket name
+dataset_name: vk-1k
 general:
-  filename_prefix: STRF
-  raw_videos_source: null
+  filename_prefix: VK
   width: 1024
   height: 1024
   clip_fps: 24
@@ -32,16 +32,14 @@ to_source_urls:
     https://vkvideo.ru/@aot_mem/all,
     https://vkvideo.ru/@memphisdesu/all
   ]
-  max_links_per_channel: 20
+  max_links_per_channel: 50
 cut_videos:
   skip_start_pct: 0.05
   skip_end_pct: 0.1
-  max_clips_per_video: 350
-  max_total_hours: 128
-  frame_stride: 1
-  num_workers: 2
-storage:
-  stored_directories: [
-    videos,
-    metadata
-  ]
+  max_total_clips: 1000
+stream_videos:
+  download_workers: 2
+  prefetch_videos: 2
+  download_timeout_seconds: 300
+  upload_workers: 4
+  max_pending_uploads: 32

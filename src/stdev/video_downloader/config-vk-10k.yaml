@@ -1,0 +1,47 @@
+# dataset_name should be a valid s3 bucket name
+dataset_name: vk-10k
+general:
+  filename_prefix: VK
+  width: 1024
+  height: 1024
+  clip_fps: 24
+  clip_frames: 129
+to_source_urls:
+  channel_urls: [
+    https://vkvideo.ru/@moscow_walker/all,
+    https://vkvideo.ru/@club226973819/all,
+    https://vkvideo.ru/@garage__54,
+    https://vkvideo.ru/@svoimxodom/all,
+    https://vkvideo.ru/@bnbproduction/all,
+    https://vkvideo.ru/@pognalishow/all,
+    https://vkvideo.ru/@danik_officialgroup/all,
+    https://vkvideo.ru/@club238513234/all,
+    https://vkvideo.ru/@club233682527/all,
+    https://vkvideo.ru/@club228981117/all,
+    https://vkvideo.ru/@novgorirk/all,
+    https://vkvideo.ru/@sibirtrofersomsk/all,
+    https://vkvideo.ru/@nikitos_1000/all,
+    https://vkvideo.ru/@club232633320/all,
+    https://vkvideo.ru/@youtube_repost/all,
+    https://vkvideo.ru/@clubyfrosta/all,
+    https://vkvideo.ru/@onlybfy/all,
+    https://vkvideo.ru/@backinmay/all,
+    https://vkvideo.ru/@yurkavolkov/all,
+    https://vkvideo.ru/@ytprtyt4/all,
+    https://vkvideo.ru/@kawaiisuki/all,
+    https://vkvideo.ru/@aot_mem/all,
+    https://vkvideo.ru/@memphisdesu/all
+  ]
+  max_links_per_channel: 50
+cut_videos:
+  skip_start_pct: 0.05
+  skip_end_pct: 0.1
+  max_total_clips: 10000
+  max_clips_per_video: 30
+  spread_clips: true
+stream_videos:
+  download_workers: 2
+  prefetch_videos: 2
+  download_timeout_seconds: 300
+  upload_workers: 4
+  max_pending_uploads: 32

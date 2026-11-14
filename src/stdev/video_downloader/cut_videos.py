@@ -3,9 +3,7 @@ import os
 import secrets
 import subprocess
 import sys
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cv2
 import numpy as np
@@ -13,6 +11,24 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from stdev.utils.image_tools import crop_maximal_rectangle
+
+
+def compute_spread_starts(
+    start_frame: int, end_frame: int, clip_frames: int, max_clips: int | None
+) -> list[int]:
+    """Evenly spaced, non-overlapping clip start frames inside [start_frame, end_frame)."""
+    usable_frames = end_frame - start_frame
+    clip_count = usable_frames // clip_frames
+    if max_clips is not None:
+        clip_count = min(clip_count, max_clips)
+    if clip_count <= 0:
+        return []
+    last_offset = usable_frames - clip_frames
+    if clip_count == 1:
+        return [start_frame + last_offset // 2]
+    return [
+        start_frame + round(index * last_offset / (clip_count - 1)) for index in range(clip_count)
+    ]
 
 
 class CutVideosPipeline:
@@ -24,23 +40,17 @@ class CutVideosPipeline:
         self.filename_prefix: str = cfg.general.filename_prefix
 
         dataset_root = f"./datasets/{cfg.dataset_name}"
-        if cfg.general.raw_videos_source is not None:
-            self.input_root = f"./datasets/{cfg.general.raw_videos_source}/raw_videos"
-        else:
-            self.input_root = os.path.join(dataset_root, "raw_videos")
+        self.input_root = os.path.join(dataset_root, "raw_videos")
         self.output_root = os.path.join(dataset_root, "videos")
         self.metadata_root = os.path.join(dataset_root, "metadata")
 
         self.skip_start_pct: float = cfg.cut_videos.skip_start_pct
         self.skip_end_pct: float = cfg.cut_videos.skip_end_pct
-        self.max_total_frames = int(cfg.cut_videos.max_total_hours * 60 * 60 * self.clip_fps)
-        self.max_clips_per_video: int = cfg.cut_videos.max_clips_per_video
-        self.frame_stride: int = cfg.cut_videos.frame_stride
-        self.num_workers: int = cfg.cut_videos.num_workers
+        self.max_total_clips: int = cfg.cut_videos.max_total_clips
+        self.max_clips_per_video: int | None = cfg.cut_videos.get("max_clips_per_video", None)
+        self.spread_clips: bool = cfg.cut_videos.get("spread_clips", False)
 
-        self.total_frames = 0
-        self._frames_lock = threading.Lock()
-        self._stop_event = threading.Event()
+        self.total_clips = 0
 
     def random_id(self) -> str:
         return f"{self.filename_prefix}_{secrets.token_urlsafe(32)}"
@@ -85,16 +95,11 @@ class CutVideosPipeline:
         with open(os.path.join(self.metadata_root, clip_id + ".json"), "w") as metadata_file:
             json.dump({"total_frames": len(frames)}, metadata_file, indent=2)
 
-        with self._frames_lock:
-            self.total_frames += len(frames)
-            self.pbar.update(len(frames))
+        self.total_clips += 1
+        self.pbar.update(1)
 
-    def should_stop(self, clips: int) -> bool:
-        return (
-            clips >= self.max_clips_per_video
-            or self.total_frames >= self.max_total_frames
-            or self._stop_event.is_set()
-        )
+    def should_stop(self) -> bool:
+        return self.total_clips >= self.max_total_clips
 
     def process_video(self, video_path: str) -> None:
         capture = cv2.VideoCapture(video_path)
@@ -103,13 +108,27 @@ class CutVideosPipeline:
         end_frame = total_frames - int(total_frames * self.skip_end_pct)
         capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
 
-        clips = 0
         frame_buffer: list[np.ndarray] = []
+        clips_from_video = 0
+        clip_starts = (
+            compute_spread_starts(
+                frame_index, end_frame, self.clip_frames, self.max_clips_per_video
+            )
+            if self.spread_clips
+            else []
+        )
 
-        while frame_index < end_frame and not self.should_stop(clips):
-            for _ in range(self.frame_stride - 1):
-                capture.grab()
-            frame_index += self.frame_stride
+        while (
+            frame_index < end_frame
+            and not self.should_stop()
+            and (self.max_clips_per_video is None or clips_from_video < self.max_clips_per_video)
+        ):
+            if self.spread_clips and not frame_buffer:
+                if clips_from_video >= len(clip_starts):
+                    break
+                frame_index = clip_starts[clips_from_video]
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            frame_index += 1
 
             is_read, bgr_frame = capture.read()
             if not is_read:
@@ -123,7 +142,7 @@ class CutVideosPipeline:
             if len(frame_buffer) == self.clip_frames:
                 self.write_clip(frame_buffer)
                 frame_buffer = []
-                clips += 1
+                clips_from_video += 1
 
         capture.release()
 
@@ -132,32 +151,21 @@ class CutVideosPipeline:
         os.makedirs(self.metadata_root, exist_ok=True)
 
         filenames = sorted(os.listdir(self.input_root))
-        self.pbar = tqdm(total=self.max_total_frames, desc="Total Frames")
+        self.pbar = tqdm(total=self.max_total_clips, desc="Total Clips")
         start_time = time.time()
 
         try:
-            with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-                futures = {
-                    executor.submit(
-                        self.process_video, os.path.join(self.input_root, filename)
-                    ): filename
-                    for filename in filenames
-                }
+            for filename in filenames:
+                if self.should_stop():
+                    break
                 try:
-                    for future in as_completed(futures):
-                        try:
-                            future.result()
-                        except Exception as error:
-                            print(f"Error while processing {futures[future]}: {error}")
-                except KeyboardInterrupt:
-                    print("\nInterrupt received, waiting for workers to finish current clips...")
-                    self._stop_event.set()
-                    executor.shutdown(wait=True, cancel_futures=True)
+                    self.process_video(os.path.join(self.input_root, filename))
+                except Exception as error:
+                    print(f"Error while processing {filename}: {error}")
         finally:
             self.pbar.close()
             elapsed = time.time() - start_time
-            fps = self.total_frames / elapsed if elapsed > 0 else 0
-            print(f"Processed {self.total_frames} frames in {elapsed:.1f}s ({fps:.1f} fps avg)")
+            print(f"Wrote {self.total_clips} clips in {elapsed:.1f}s")
 
 
 def main() -> None:

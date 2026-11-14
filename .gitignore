@@ -23,6 +23,9 @@ train_datasets/
 samples/
 runs/
 
+# Network
+cookies.txt
+
 # Benchmark data and results
 benchmark_datasets/
 benchmark_cache/
