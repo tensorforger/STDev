@@ -9,7 +9,7 @@ Each invocation provides the persistent research state and results from the late
 ## Research hyperparamters
 
 - This is the **Phase 2** of autoresearch. Use prior knowledge of phase 1 (`./autoresearch`), further optimize for new VAE and task.
-- Number of runs per round **N=1**
+- Number of runs per round **N=4**
 - Run time budget **T = 30 minutes**
 - GPU memory available to a run **VRAM_LIMIT=32** GB (one RTX 5090). A run may use the entire GPU.
 - Runs of a round are executed **in parallel** by `start_round.sh`: run i of the list gets its own GPU (N GPUs, so up to N runs per round). Each run sees exactly one GPU (`CUDA_VISIBLE_DEVICES`), so keep using plain `"cuda"`.
@@ -151,6 +151,8 @@ Quality and computational efficiency form a pareto-frontier. Don't try to find "
 ## Single iteration in details
 
 1. Read the benchmark results of previous round.
+
+> If this is the first round, there are no results yet, but baseline is already there. Run it as the first run in the first round along with N - 1 other runs.
 
 Benchmark results are in `./raw_results/run_<run_ID>/metrics.json`
 Profiling results are in `./raw_results/run_<run_ID>/profiles/<resolution>/`: CPU and CUDA time of a single forward pass of the compiled model, and the memory timeline of the not compiled model (the profiler cannot attribute memory of compiled graphs).

@@ -32,6 +32,8 @@ dependencies = [
     "cpbd-py312",
     "yt-dlp",
     "selenium",
+    "aiohttp",
+    "pyarrow",
     "dotenv",
 ]
 
