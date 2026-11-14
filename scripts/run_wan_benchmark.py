@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
+from stdev.vaes.tiny_wan_2_1_vae import TinyWan21VAE
 from stdev.vaes.wan_2_1_vae import Wan21VAE
 from stdev.wan_benchmark.dataset import WanBenchmarkDataset
 from stdev.wan_benchmark.efficiency import EFFICIENCY_SCENARIOS, measure_latency, measure_memory
@@ -19,6 +20,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_CACHE_DIRECTORY = REPOSITORY_ROOT / "benchmark_cache"
 RAW_RESULTS_DIRECTORY = REPOSITORY_ROOT / "raw_results"
 VAE_PATH = REPOSITORY_ROOT / "models" / "Wan2.1-T2V-1.3B-Diffusers" / "vae"
+TINY_VAE_PATH = REPOSITORY_ROOT / "models" / "taew2_1.safetensors"
 
 VAE_DTYPE = torch.bfloat16
 UPSCALER_DTYPE = torch.bfloat16
@@ -122,6 +124,7 @@ def run_benchmark(exit_stack: ExitStack) -> None:
         return
 
     vae = Wan21VAE(str(VAE_PATH), device="cuda", dtype=VAE_DTYPE)
+    tiny_vae = TinyWan21VAE(str(TINY_VAE_PATH), device="cuda", dtype=VAE_DTYPE)
     upscaler = load_upscaler(arguments.upscaler)
 
     results_directory = RAW_RESULTS_DIRECTORY / upscaler.get_name()
@@ -145,7 +148,7 @@ def run_benchmark(exit_stack: ExitStack) -> None:
         task = QUALITY_TASKS[dataset_path.name]
         quality[dataset_path.name] = evaluate_quality(
             upscaler=upscaler,
-            vae=vae,
+            vae=tiny_vae if task.kind == "video" else vae,
             dataset=dataset,
             task=task,
             fid_evaluator=build_fid_evaluator(

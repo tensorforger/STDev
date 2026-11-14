@@ -139,6 +139,8 @@ They can approximately be ordered by the priority:
 - Temporal upscale patch FID on videos (lower is better): `quality.wan_video.fid_patch`
 - All other metrics are secondary
 
+The benchmark decodes images with the full Wan 2.1 VAE and videos with the tiny Wan 2.1 VAE (`taew2_1`).
+
 2. Benchmark computational efficency metrics (Latency and peak VRAM are prioritized). Latency is the latency of a **single model forward pass** (`Upscaler.single_forward`), not of the whole sampling loop. Minimize it. Reducing the number of sampling steps is not a latency gain here, low-step distillation is out of scope.
 
 Quality and computational efficiency form a pareto-frontier. Don't try to find "best balance" in a single setup. Instead, undertsand the parameter relationship and move the entire frontier forward.
