@@ -71,12 +71,27 @@ Asked two agents for deep research on what VAEs should be implementd fist. More 
 
 Summarizing it, we should start from **Wan2.1-VAE**, then **MiniMax-H3 VisualVAE** and **Qwen-Image-2.1 VAE**. 
 
+### 8. Autoresearch on Wan 2.1 latents (phase 2: images 2x, videos 2x in time)
+
+Setup: agent-driven rounds of 4 parallel 30 min runs (plus two 2 h rounds), Wan 2.1 VAE, 19k images + 9k videos, benchmark image 512 -> 1024 (full VAE) and video 17 -> 33 frames at 512 (tiny VAE), primary metric image patch FID. ~70 runs (run_0000 - run_0072). Log, results and the production recommendation: `autoresearch_2/experiment_logs.md` (section "PRODUCTION RECOMMENDATION").
+
+Key insights:
+- Wan latents are smooth (HR latents correlate 0.95 with the upsampled LR; residual std 0.22 vs 0.79 for FLUX.2). The flow must run on the per channel normalized residual over the aligned LR latents; on raw latents the detail is buried under the noise (-3 patch FID). The same applies to any smooth / low channel VAE.
+- The LR input path matters: a learned LR encoder (pixel shuffle, causal phase temporal upsampling) halved patch FID vs. bilinear latent upsampling. Causal frame alignment is exact for the Wan VAE (target frame j <- source frame ceil(j / 2), frame 0 identical).
+- A plain window transformer at full latent resolution (DiT style adaLN-zero, shifted 8x8 windows) beats the UNet; a causal depthwise temporal convolution (previous frame only) replaces temporal attention with no loss (temporal locality works). SwiGLU / GELU equal; RoPE = relative bias; AttnRes better per step but costs memory (rejected: inference buffers).
+- Stability needs two fixes: RMS norm of the sigma / hff condition vector (single-sample loss spikes from narrow sigma bands at high LR) and QK-norm (slow attention logit growth over long training).
+- Inference memory: 5D window attention silently fell back to the math SDPA path; folding windows into the batch halved the memory peak (-7% latency). The FFN hidden is the remaining peak.
+- Batch scaling: square root LR rule with long warmup; the critical batch grows during training; a ramp 16 -> 64 matches constant 16 per sample; do not start large. 30 min runs are step limited (small batch, fast models win); training seed noise ~0.1-0.3 patch FID.
+- Sampling: few steps (14-20), shift ~4, initial noise temperature < 1 (0.9-1.0 images, 0.7-0.8 video); optimum moves towards more steps / temperature 1 with training.
+- Results: image / video patch FID 49.1 / 13.9 (baseline) -> 3.77 / 4.98 (45M, 2 h on one GPU); pixel bicubic 8.21, LR frame copy 5.69, VAE oracle 1.30 / 3.98.
+
 ## Open problems
 
 - Pretrain phase 2 progress and forgetting of lower resolutions (data limited and sequential schedule).
 - Only FLUX.2 latents are covered so far; per-VAE models are not yet trained at full scale.
 - Per-VAE models multiply the training cost; the recipe must be cheap or reusable across VAEs.
 - Condition design: text is nearly useless, 4 HF features reduce to ~1 effective feature. Need to test the 1 feature at scale.
+- Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained; downscaled images (256 -> 512, 128 -> 256) or 1024 mosaics of small images contain them densely at the right footprint. Benchmark-only training (the phase 2 optimum at 30 min) cannot show this. Needs a mosaic / small-detail eval and a paired training test: `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
 
 ## Plan
 
