@@ -87,19 +87,16 @@ Key insights:
 
 ## Open problems
 
-- Pretrain phase 2 progress and forgetting of lower resolutions (data limited and sequential schedule).
-- Only FLUX.2 latents are covered so far; per-VAE models are not yet trained at full scale.
-- Per-VAE models multiply the training cost; the recipe must be cheap or reusable across VAEs.
-- Condition design: text is nearly useless, 4 HF features reduce to ~1 effective feature. Need to test the 1 feature at scale.
-- Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained; downscaled images (256 -> 512, 128 -> 256) or 1024 mosaics of small images contain them densely at the right footprint. Benchmark-only training (the phase 2 optimum at 30 min) cannot show this. Needs a mosaic / small-detail eval and a paired training test: `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
+1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes?
+2. Per-VAE models multiply the training cost; the recipe must be cheap or reusable across VAEs.
+3. Condition design: text is nearly useless, 4 HF features reduce to ~1 effective feature. Need to test the 1 feature at scale.
+4. Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained. See `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
 
 ## Plan
 
 1. Separate model per VAE, each trained from scratch (the universal shared-core model lost to per-VAE models on every VAE). The universal model is shelved. 
-   - Reuse the same architecture and recipe for all VAEs, only adapting channel counts and video handling.
    - Implement VAE upscalers in optimal order (`reports/prioritized_vaes_by_demand_qwen.md`)
+   - Reuse the same architecture and recipe for all VAEs, only adapting channel counts and video handling, if that is possible (open problem 1)
 2. Pretrain the new base models from scratch:
-   - more training than before,
-   - no prompt conditioning,
-   - a single sharpness conditioning scalar,
-   - better budget allocation with resolution bucket training.
+   - more training than before
+   - autoresearch 2 recipe
