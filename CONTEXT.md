@@ -89,6 +89,14 @@ Key insights:
 
 222M window transformer (autoresearch_2 recipe at width 768, depth 16) + 10% hff dropout to a null embedding (CFG). Online pipeline: GPUs 6-7 encode ReLAION images (full VAE; 90% 512 -> 1024, 10% 256 -> 512) and vk-50k clips from S3 (tiny VAE; mostly 17 -> 33 frames at 512, rare 1024 / combined temporal + spatial pairs) into a rolling cache and runs an hourly 100-image patch FID benchmark; 6 GPUs train (DDP, same pair type per micro-step on all ranks, batch ramp by accumulation, sqrt LR). Open-ended: LR decay over 30% more steps starts on a control file. Plan, measurements and LR probe: `reports/wan_pretrain_plan.md`; code `src/stdev/wan_pretrain/`, launcher `scripts/run_wan_pretrain.py`.
 
+### 10. ComfyUI development node pack
+
+The repository root doubles as a ComfyUI custom node pack for local testing of the pretraining checkpoints: clone to `custom_nodes/`, put checkpoints into `models/latent_upscale_models/`. Entry points `__init__.py` / `nodes.py` only register modules; logic lives in `src/stdev/comfy_nodes/<vae>/`, one mostly independent node set per VAE upscaler (new ones are added to `NODE_MODULES`). Checkpoints are safetensors with metadata (`vae`, `model_config`), converted by `model_ops/download_checkpoint.py` (newest EMA weights of a run from the `checkpoints` bucket). 
+
+Supported packs:
+
+1. Wan 2.1 (load, image, video nodes; steps, CFG on the hff condition, shift, noise scale, spatial / temporal toggles).
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes?
