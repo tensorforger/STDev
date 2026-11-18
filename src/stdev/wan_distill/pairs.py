@@ -8,6 +8,7 @@ chunks of consecutive planned samples per file.
 import json
 import math
 import random
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from stdev.wan_pretrain.config import BENCHMARK_SAMPLER, PAIR_TYPES, PairType, p
 PAIR_SUFFIX = ".vz.safetensors"
 EXACT_CODEC = "cast_fp16"
 PLAN_SEED = 0
+SHARD_COUNT_THREADS = 16
 
 NULL_HFF_PROBABILITY = 0.1
 RANDOM_HFF_PROBABILITY = 0.45
@@ -119,22 +121,30 @@ def noise_scale_of(pair_type: PairType) -> float:
     return BENCHMARK_SAMPLER.noise_scale_spatial if pair_type.is_spatial else BENCHMARK_SAMPLER.noise_scale_temporal
 
 
+def shard_sample_count(shard_path: Path) -> int:
+    return int(vaezip.load(shard_path)["hff"].decode(dtype=torch.float32).shape[0])
+
+
 def plan_pair_type(pair_type: PairType, count: int, cache_directory: Path, seed_offset: int) -> list[PlannedSample]:
     """
-    Spreads the samples over all cache shards of the type (random shard order, a few random samples per shard)
-    and draws the generation settings.
+    Spreads the samples over all cache shards of the type (random shard order, a few random samples per shard,
+    real shard sizes: the last shards of a writer can be partial) and draws the generation settings.
     """
     generator = random.Random(f"{PLAN_SEED}-{pair_type.name}")
     shard_paths = list_shards(cache_directory / pair_type.name)
     if not shard_paths:
         raise RuntimeError(f"no cache shards for {pair_type.name}")
+    with ThreadPoolExecutor(SHARD_COUNT_THREADS) as executor:
+        sizes = dict(zip(shard_paths, executor.map(shard_sample_count, shard_paths)))
+    if sum(sizes.values()) < count:
+        raise RuntimeError(f"{pair_type.name}: {count} samples exceed the cache ({sum(sizes.values())})")
     generator.shuffle(shard_paths)
     per_shard = math.ceil(count / len(shard_paths))
-    if per_shard > pair_type.shard_samples:
-        raise RuntimeError(f"{pair_type.name}: {count} samples exceed the cache")
+    while sum(min(per_shard, size) for size in sizes.values()) < count:
+        per_shard += 1
     samples: list[PlannedSample] = []
     for shard_path in shard_paths:
-        for shard_index in sorted(generator.sample(range(pair_type.shard_samples), per_shard)):
+        for shard_index in sorted(generator.sample(range(sizes[shard_path]), min(per_shard, sizes[shard_path]))):
             if len(samples) == count:
                 break
             mode_draw = generator.random()

@@ -203,9 +203,14 @@ def measure(arguments: argparse.Namespace, teacher: torch.nn.Module) -> None:
 
 
 def prefetch(chunks: list[Chunk], cache_directory: Path, output: queue.Queue) -> None:
-    for chunk in chunks:
-        output.put((chunk, *load_chunk_inputs(chunk, cache_directory)))
-    output.put(None)
+    """
+    Puts (chunk, inputs, encoded noise) per chunk; an exception is put instead and re-raised by the consumer.
+    """
+    try:
+        for chunk in chunks:
+            output.put((chunk, *load_chunk_inputs(chunk, cache_directory)))
+    except Exception as error:
+        output.put(error)
 
 
 def main() -> None:
@@ -257,7 +262,10 @@ def main() -> None:
     done_samples = 0
     done_cost = 0.0
     for chunk_number in range(len(rank_chunks)):
-        chunk, inputs, encoded_noise = inputs_queue.get()
+        item = inputs_queue.get()
+        if isinstance(item, Exception):
+            raise item
+        chunk, inputs, encoded_noise = item
         chunk_start = time.perf_counter()
         pair_chunk = generate_chunk(teacher, chunk, inputs)
         write_pair_chunk(output_directory / chunk.pair_type, chunk, pair_chunk, encoded_noise)
