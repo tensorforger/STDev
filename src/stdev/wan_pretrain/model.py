@@ -442,8 +442,21 @@ class WanUpscalerTransformer(nn.Module):
         returns:
             velocity: [B, C, T, H, W] (noise - residual)
         """
+        return self.forward_with_condition(noisy_residual, self.conditioning(sigmas, hff, hff_mask), latents_source)
+
+    def forward_with_condition(
+        self, noisy_residual: torch.Tensor, condition: torch.Tensor, latents_source: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        args:
+            noisy_residual: [B, C, T, H, W]
+            condition: [B, condition_dim], output of the conditioning encoder
+            latents_source: [B, C, T_lr, H_lr, W_lr], normalized Wan 2.1 latents
+        returns:
+            velocity: [B, C, T, H, W] (noise - residual)
+        """
         batch_size, channels, num_frames, height, width = noisy_residual.shape
-        condition = self.conditioning(sigmas, hff, hff_mask).repeat_interleave(num_frames, dim=0)  # [B * T, D_c]
+        condition = condition.repeat_interleave(num_frames, dim=0)  # [B * T, D_c]
         latents_aligned = align_source(latents_source, (num_frames, height, width))
         stacked = torch.cat([noisy_residual, latents_aligned.to(noisy_residual.dtype)], dim=1)
         folded = stacked.permute(0, 2, 1, 3, 4).reshape(batch_size * num_frames, 2 * channels, height, width)
