@@ -101,6 +101,14 @@ Supported packs:
 
 1. Wan 2.1 (load, image, video nodes; steps, CFG on the hff condition, shift, noise scale, spatial / temporal toggles).
 
+### 11. Wan 2.1 single step rectified flow distillation (2026-11-18)
+
+40k teacher pairs from the pretraining cache (pretraining type shares; hff true / random / null, CFG 1-3 on half of the non-null, negative = null hff), 2 h on 8 GPUs. Student = teacher + zero initialized guidance condition, trained from the teacher EMA on sigma 1 only. One epoch (~15 min) is enough: 1-step EMA fid_patch 2.87 vs teacher 2.76 with 20 steps (~96% of the gain over bicubic), same mse_lr. Raw weights oscillate (lr 1e-3 is high), the guidance input changes little. Report: `reports/wan_rf_distillation.md`; code `src/stdev/wan_distill/`; checkpoint `distill_runs/wan_distill_v1` (R2 `checkpoints/wan_distill_v1/`).
+
+### 12. Small single step students (size ladder, 2026-11-19)
+
+The large student architecture scaled down (19.5M -> 0.52M), trained from scratch on one GPU each for ~9 h on pairs generated online by the large 1-step student. Final 1-step fid_patch: 19.5M 3.79, 10.8M 3.98, 5.0M 4.46, 2.3M 5.09, 1.1M 6.22, 0.52M 8.00 (bicubic 5.49): ~2M is the smallest size that beats bicubic. Not saturated at 7 h (decay still gave -0.25 to -0.9). Below 20M the models are overhead bound (6-9 ms vs 4.6 ms for 20M at 1024 px; head dim 32 slower): smaller is not faster without CUDA graphs. Small text degrades with size. Report: `reports/wan_small_students.md`.
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes?

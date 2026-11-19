@@ -2,7 +2,8 @@
 Distributed single step benchmark of the Wan distillation on the fixed 1000-image set (wan_eval_1000, the set of
 the pretraining evaluations): every rank upscales a contiguous slice 512 -> 1024 (true hff, fixed per image
 noise, given guidance), decodes it and feeds patch / whole image FID; the fake FID statistics and the mse_lr
-sums are all-reduced, so the numbers equal a single process evaluation (teacher, 20 steps: fid_patch 2.76).
+sums are all-reduced (when a process group exists; a single process evaluates everything), so the numbers equal a
+single process evaluation (teacher, 20 steps: fid_patch 2.76).
 """
 
 from pathlib import Path
@@ -79,10 +80,11 @@ class DistributedEvaluation:
                 for offset, index in enumerate(indices):
                     if index < EVALUATION_SAVED_IMAGES:
                         cv2.imwrite(str(output_directory / f"{index:05d}_{tag}.png"), torch_to_cv2(images[offset : offset + 1]))
-        for metric in self.fid_evaluator.metrics.values():
-            for name in FAKE_STATE_NAMES:
-                distributed.all_reduce(getattr(metric, name))
-        distributed.all_reduce(squared_error_sum)
+        if distributed.is_initialized():
+            for metric in self.fid_evaluator.metrics.values():
+                for name in FAKE_STATE_NAMES:
+                    distributed.all_reduce(getattr(metric, name))
+            distributed.all_reduce(squared_error_sum)
         metrics = self.fid_evaluator.compute()
         metrics["mse_lr"] = squared_error_sum.item() / self.count
         return metrics
