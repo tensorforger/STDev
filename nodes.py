@@ -5,7 +5,10 @@ src/stdev/comfy_nodes/<vae>/nodes.py; register new ones in NODE_MODULES.
 
 import importlib
 
-NODE_MODULES = ("stdev.comfy_nodes.wan_2_1.nodes",)
+NODE_MODULES = (
+    "stdev.comfy_nodes.wan_2_1.nodes",
+    "stdev.comfy_nodes.wan_2_1.distilled_nodes",
+)
 
 NODE_CLASS_MAPPINGS: dict = {}
 NODE_DISPLAY_NAME_MAPPINGS: dict = {}

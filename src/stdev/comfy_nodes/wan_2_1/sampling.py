@@ -74,17 +74,17 @@ def normalization_statistics(device: torch.device) -> tuple[torch.Tensor, torch.
 
 
 def target_size_of(
-    source_size: tuple[int, int, int], settings: UpscaleSettings
+    source_size: tuple[int, int, int], spatial: bool, temporal: bool
 ) -> tuple[int, int, int]:
     frames, height, width = source_size
-    if settings.temporal:
+    if temporal:
         frames = 1 + 2 * (frames - 1)
-    if settings.spatial:
+    if spatial:
         height, width = 2 * height, 2 * width
     return frames, height, width
 
 
-def pad_to_window_grid(latents: torch.Tensor, settings: UpscaleSettings) -> torch.Tensor:
+def pad_to_window_grid(latents: torch.Tensor, spatial: bool) -> torch.Tensor:
     """
     Replicate padding (bottom, right) so that the target latent grid is a multiple of the window size.
 
@@ -93,7 +93,7 @@ def pad_to_window_grid(latents: torch.Tensor, settings: UpscaleSettings) -> torc
     returns:
         latents: [B, C, T, H_padded, W_padded]
     """
-    multiple = WINDOW_SIZE // 2 if settings.spatial else WINDOW_SIZE
+    multiple = WINDOW_SIZE // 2 if spatial else WINDOW_SIZE
     pad_height = -latents.shape[3] % multiple
     pad_width = -latents.shape[4] % multiple
     if pad_height == 0 and pad_width == 0:
@@ -169,12 +169,12 @@ def upscale_latents(
         latents: [B, 16, T_hr, H_hr, W_hr], raw Wan 2.1 VAE latents, dtype: torch.float32, on the CPU
     """
     mean, std = normalization_statistics(device)
-    target_size = target_size_of(tuple(latents.shape[2:]), settings)
+    target_size = target_size_of(tuple(latents.shape[2:]), settings.spatial, settings.temporal)
     results = []
     for index in range(latents.shape[0]):
         normalized = (latents[index : index + 1].to(device).float() - mean) / std
-        padded = pad_to_window_grid(normalized, settings)
-        padded_target = target_size_of(tuple(padded.shape[2:]), settings)
+        padded = pad_to_window_grid(normalized, settings.spatial)
+        padded_target = target_size_of(tuple(padded.shape[2:]), settings.spatial, settings.temporal)
         upscaled = sample_residual(
             model, padded, padded_target, settings, settings.seed + index, on_step
         )

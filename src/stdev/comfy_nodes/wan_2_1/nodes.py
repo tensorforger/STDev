@@ -32,7 +32,7 @@ class LoadWan21Upscaler:
     def INPUT_TYPES(cls) -> dict:
         return {
             "required": {
-                "model_name": (common.list_checkpoints(VAE_NAME),),
+                "model_name": (common.list_checkpoints(VAE_NAME, common.DEFAULT_ARCHITECTURE),),
                 "dtype": (list(DTYPES), {"default": "bfloat16"}),
             }
         }

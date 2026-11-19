@@ -99,7 +99,7 @@ The repository root doubles as a ComfyUI custom node pack for local testing of t
 
 Supported packs:
 
-1. Wan 2.1 (load, image, video nodes; steps, CFG on the hff condition, shift, noise scale, spatial / temporal toggles).
+1. Wan 2.1 (load, image, video nodes; steps, CFG on the hff condition, shift, noise scale, spatial / temporal toggles). Distilled single step students (large and small, `architecture` metadata `WanStudentTransformer`) have their own load / image / video nodes (guidance, hff, seed); `model_ops/download_checkpoint.py --run wan_distill_v1 wan_small_s20m ...` converts them.
 
 ### 11. Wan 2.1 single step rectified flow distillation (2026-11-18)
 

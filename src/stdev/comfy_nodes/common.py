@@ -17,6 +17,8 @@ import folder_paths
 MODEL_FOLDER_NAME = "latent_upscale_models"
 METADATA_VAE_KEY = "vae"
 METADATA_CONFIG_KEY = "model_config"
+METADATA_ARCHITECTURE_KEY = "architecture"
+DEFAULT_ARCHITECTURE = "WanUpscalerTransformer"
 
 
 def register_model_folder() -> None:
@@ -33,17 +35,20 @@ def read_metadata(file_name: str) -> dict[str, str]:
         return dict(file.metadata() or {})
 
 
-def list_checkpoints(vae_name: str) -> list[str]:
+def list_checkpoints(vae_name: str, architecture: str = DEFAULT_ARCHITECTURE) -> list[str]:
     """
     returns:
-        file names in the model folder whose metadata marks them as upscalers of the given VAE
+        file names in the model folder whose metadata marks them as upscalers of the given VAE and
+        architecture (files without architecture metadata are the default architecture)
     """
     register_model_folder()
-    return [
-        file_name
-        for file_name in folder_paths.get_filename_list(MODEL_FOLDER_NAME)
-        if read_metadata(file_name).get(METADATA_VAE_KEY) == vae_name
-    ]
+    matching = []
+    for file_name in folder_paths.get_filename_list(MODEL_FOLDER_NAME):
+        metadata = read_metadata(file_name)
+        file_architecture = metadata.get(METADATA_ARCHITECTURE_KEY, DEFAULT_ARCHITECTURE)
+        if metadata.get(METADATA_VAE_KEY) == vae_name and file_architecture == architecture:
+            matching.append(file_name)
+    return matching
 
 
 def load_checkpoint(file_name: str) -> tuple[dict[str, torch.Tensor], dict]:
