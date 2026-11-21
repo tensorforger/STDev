@@ -2,7 +2,12 @@
 
 **"Steppe"** is the experimental *"Generative Latent Upscaler"* - model that upscales latents with a small generative model explicitly trained for upscaling. It lies somewhere in between *Generative Models as Upscalers* when a large pretrained diffuseion model is used for upscaling and *Latent Upscale Adapters (LUA)* - deterministic single-pass latent mapping models. 
 
-**This repository is the development codebase, production version is not released yet.**
+> [!NOTE]
+> ### Steppe is released 🌾
+> This repository is the development (research and training) codebase. The production release:
+> - **ComfyUI node:** [TensorForger/ComfyUI-Steppe](https://github.com/TensorForger/ComfyUI-Steppe) (also in ComfyUI-Manager: search for "Steppe")
+> - **Models:** [TensorForger/Steppe-Wan2.1](https://huggingface.co/TensorForger/Steppe-Wan2.1) on Hugging Face
+> - **Demo:** [TensorForger/Steppe](https://huggingface.co/spaces/TensorForger/Steppe) Space on Hugging Face
 
 
 ### Environment

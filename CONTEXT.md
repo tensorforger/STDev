@@ -117,6 +117,10 @@ All solutions get only the 64x64 Wan 2.1 latent of a 512 image and return the de
 - Feeding our latents to the spacepxl decoder (4x, downscaled back) is worse than the original VAE (4.51 vs 4.36). Ground truth hff does not help at guidance 1 (+-0.1 patch FID), null hff is enough. Third party latent upscalers are unusable without a refinement pass.
 - Next: a fast decoder for our latents. Report: `reports/wan_upscaling_benchmark.md`; code `scripts/run_upscale_benchmark.py`, `src/stdev/upscale_benchmark/`; plot `scripts/plot_upscale_benchmark.py`.
 
+### 14. Public release "Steppe" (2026-11-21 / 22)
+
+Released under the "Steppe" brand (MIT, Wan VAE Apache-2.0 credited in NOTICE) on the TensorForger accounts. Production ComfyUI node pack [ComfyUI-Steppe](https://github.com/TensorForger/ComfyUI-Steppe): a clean reimplementation, independent of this repo (pure PyTorch `steppe` package plus thin ComfyUI nodes: loader, basic/advanced upscale for images and videos, spatial and temporal, measure hff). It is in the Comfy registry and ComfyUI-Manager (`steppe`, v1.0.3) and auto-downloads models. Three models were uploaded to [TensorForger/Steppe-Wan2.1](https://huggingface.co/TensorForger/Steppe-Wan2.1): 200M base (teacher, 20 steps), 200M 1-step (default) and 20M 1-step (lite). Its `config.json` is the model catalog the node fetches, which makes HF count downloads. A Gradio ZeroGPU demo Space, [TensorForger/Steppe](https://huggingface.co/spaces/TensorForger/Steppe), runs 2x and chained 4x image upscaling with the 200M 1-step model. Defaults: guidance 1, hff 0.9. Verified in ComfyUI with `wan_2.1_vae` / `qwen_image_vae`, chained 2x and any aspect ratio. Card and image generators are in `scripts/cards/`.
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes?
