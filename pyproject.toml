@@ -35,6 +35,7 @@ dependencies = [
     "aiohttp",
     "pyarrow",
     "dotenv",
+    "spandrel",
 ]
 
 [project.optional-dependencies]

@@ -109,6 +109,14 @@ Supported packs:
 
 The large student architecture scaled down (19.5M -> 0.52M), trained from scratch on one GPU each for ~9 h on pairs generated online by the large 1-step student. Final 1-step fid_patch: 19.5M 3.79, 10.8M 3.98, 5.0M 4.46, 2.3M 5.09, 1.1M 6.22, 0.52M 8.00 (bicubic 5.49): ~2M is the smallest size that beats bicubic. Not saturated at 7 h (decay still gave -0.25 to -0.9). Below 20M the models are overhead bound (6-9 ms vs 4.6 ms for 20M at 1024 px; head dim 32 slower): smaller is not faster without CUDA graphs. Small text degrades with size. Report: `reports/wan_small_students.md`.
 
+### 13. Unified benchmark against other 2x upscaling solutions (2026-11-20)
+
+All solutions get only the 64x64 Wan 2.1 latent of a 512 image and return the decoded 1024 image; 1000 Axis-V1 photos, metrics fid, patch_fid, roundtrip MSE / CIEDE2000, batch 1 latency (decode included, eager bf16, RTX 5090), peak VRAM. Compared: our base (20 steps) and students (200M, 20M, 2M; null hff, guidance 1, full or tiny VAE decoder) against bicubic, SPAN, Real-ESRGAN, spacepxl Wan2.1-VAE-upscale2x, bicubic / NN (ComfyUI-VAE-Utils) / SesquiLSR latent upscalers. Patch FID: base 4.31, 200M 4.36, 20M 5.85, spacepxl 6.33 (29 ms), 20M + tiny VAE 10.43 (26 ms), SPAN 11.19, Real-ESRGAN 13.83, bicubic 14.13, SesquiLSR 29, NN latent 51.
+- Ours is best at >= 140 ms (-70% patch FID vs bicubic on this sharper domain, -50% on ReLAION); 1 step distillation costs +1%.
+- Latency is dominated by the full VAE decode at 1024 (~115 ms more than the tiny decoder), not by the upscaler; the tiny decoder costs +78% patch FID and makes model size irrelevant (2M 11.60 vs 20M 10.43). spacepxl's decoder (integrated 2x at the cost of a 512 decode) is the best low latency option; nothing of ours lies between 30 and 140 ms.
+- Feeding our latents to the spacepxl decoder (4x, downscaled back) is worse than the original VAE (4.51 vs 4.36). Ground truth hff does not help at guidance 1 (+-0.1 patch FID), null hff is enough. Third party latent upscalers are unusable without a refinement pass.
+- Next: a fast decoder for our latents. Report: `reports/wan_upscaling_benchmark.md`; code `scripts/run_upscale_benchmark.py`, `src/stdev/upscale_benchmark/`; plot `scripts/plot_upscale_benchmark.py`.
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes?
