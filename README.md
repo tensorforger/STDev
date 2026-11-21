@@ -1,5 +1,10 @@
 # STDev
 
+**"Steppe"** is the experimental *"Generative Latent Upscaler"* - model that upscales latents with a small generative model explicitly trained for upscaling. It lies somewhere in between *Generative Models as Upscalers* when a large pretrained diffuseion model is used for upscaling and *Latent Upscale Adapters (LUA)* - deterministic single-pass latent mapping models. 
+
+**This repository is the development codebase, production version is not released yet.**
+
+
 ### Environment
 
 ```bash
