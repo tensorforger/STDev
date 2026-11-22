@@ -121,17 +121,17 @@ All solutions get only the 64x64 Wan 2.1 latent of a 512 image and return the de
 
 Released under the "Steppe" brand (MIT, Wan VAE Apache-2.0 credited in NOTICE) on the TensorForger accounts. Production ComfyUI node pack [ComfyUI-Steppe](https://github.com/TensorForger/ComfyUI-Steppe): a clean reimplementation, independent of this repo (pure PyTorch `steppe` package plus thin ComfyUI nodes: loader, basic/advanced upscale for images and videos, spatial and temporal, measure hff). It is in the Comfy registry and ComfyUI-Manager (`steppe`, v1.0.3) and auto-downloads models. Three models were uploaded to [TensorForger/Steppe-Wan2.1](https://huggingface.co/TensorForger/Steppe-Wan2.1): 200M base (teacher, 20 steps), 200M 1-step (default) and 20M 1-step (lite). Its `config.json` is the model catalog the node fetches, which makes HF count downloads. A Gradio ZeroGPU demo Space, [TensorForger/Steppe](https://huggingface.co/spaces/TensorForger/Steppe), runs 2x and chained 4x image upscaling with the 200M 1-step model. Defaults: guidance 1, hff 0.9. Verified in ComfyUI with `wan_2.1_vae` / `qwen_image_vae`, chained 2x and any aspect ratio. Card and image generators are in `scripts/cards/`.
 
+New insights from release: community asks for a bit different VAE support then initial plan, most liked comment asks for MOSS-Image (**Flux.2 VAE**) and Qwen Image 2.1 (**Qwen Image 2.1 VAE**)
+
 ## Open problems
 
-1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes?
-2. Per-VAE models multiply the training cost; the recipe must be cheap or reusable across VAEs.
-3. Condition design: text is nearly useless, 4 HF features reduce to ~1 effective feature. Need to test the 1 feature at scale.
-4. Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained. See `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
+1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes? Need to find out if recipe advantages can be transfered across VAEs.
+2. Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained. See `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
 
 ## Plan
 
-1. Separate model per VAE, each trained from scratch (the universal shared-core model lost to per-VAE models on every VAE). The universal model is shelved. 
-   - Implement VAE upscalers in optimal order (`reports/prioritized_vaes_by_demand_qwen.md`)
+1. Separate model per VAE, each trained from scratch. 
+   - Implement VAE upscalers in optimal order (oreder can be slightly changed, reference is `reports/prioritized_vaes_by_demand_qwen.md`)
    - Reuse the same architecture and recipe for all VAEs, only adapting channel counts and video handling, if that is possible (open problem 1)
 2. Pretrain the new base models from scratch:
    - more training than before
