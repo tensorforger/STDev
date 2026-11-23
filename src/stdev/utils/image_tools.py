@@ -230,16 +230,21 @@ def show_cv2_image(image: np.ndarray) -> None:
 
 
 def crop_maximal_rectangle(
-    image: np.ndarray, target_height: int, target_width: int
+    image: np.ndarray,
+    target_height: int,
+    target_width: int,
+    interpolation: int | None = None,
 ) -> np.ndarray:
     """
     Crops maximal rectangle with target aspect ratio centered by remaining axis,
     then resizes cropped tile to target shape. Output is not "stretched" like with common resize.
+    By default the resize is antialiased: area averaging when downscaling, Lanczos when upscaling.
 
     Args:
         image: numpy ndarray, the input image where rectangle would be cropped.
         target_height: int, height of output image
         target_width: int, width of output image
+        interpolation: cv2 interpolation flag overriding the default choice
 
     Returns:
         image with shape (target_height, target_width, 3)
@@ -264,6 +269,13 @@ def crop_maximal_rectangle(
     cropped_image = image[
         start_y : start_y + crop_height, start_x : start_x + crop_width
     ]
-    image = cv2.resize(cropped_image, (target_width, target_height), cv2.INTER_AREA)
+    if (crop_height, crop_width) == (target_height, target_width):
+        return np.ascontiguousarray(cropped_image)
+    if interpolation is None:
+        is_downscale = crop_height >= target_height and crop_width >= target_width
+        interpolation = cv2.INTER_AREA if is_downscale else cv2.INTER_LANCZOS4
+    image = cv2.resize(
+        cropped_image, (target_width, target_height), interpolation=interpolation
+    )
 
     return image

@@ -123,6 +123,17 @@ Released under the "Steppe" brand (MIT, Wan VAE Apache-2.0 credited in NOTICE) o
 
 New insights from release: community asks for a bit different VAE support then initial plan, most liked comment asks for MOSS-Image (**Flux.2 VAE**) and Qwen Image 2.1 (**Qwen Image 2.1 VAE**)
 
+### 15. Autoresearch on FLUX.2 latents (phase 3: 512 -> 1024, 2026-11-22 / 23)
+
+Setup: 5 rounds of 4 parallel 30 min runs (run_0000 - run_0019, ~50M models), 20k ReLAION + 20k 4KLSDB images (center crop, FLUX.2 VAE; low resolution inputs also stored with other downscaling filters and JPEG), fixed Axis-V1 1k benchmark (patch FID, FID, low res MSE, chroma dE00, single forward latency p95, peak VRAM). Log, answers and the pretrain recipe: `autoresearch_3/experiment_logs.md` ("RECOMMENDED PRETRAIN RECIPE"); code `src/stdev/flux_upscalers/`, `src/stdev/flux_benchmark/`, `flux_infra/`; data `scripts/download_flux2_sources.py`, `scripts/encode_flux2_datasets.py`.
+
+- Phase 1 and 2 findings compound: the phase 2 plain window transformer + normalized residual + learned source path beats the phase 1 UNet on FLUX.2 too (2.45 vs 2.95 with all shifts on both). The residual gain is small on FLUX.2 (-0.3 vs -3 on Wan) because FLUX.2 latents are not smooth (HR / upsampled LR correlation 0.69 vs 0.95), but it never hurts: residual is the universal parameterization (open problem 1).
+- Do not transfer: initial noise temperature < 1 and sampling shift 4 (FLUX.2: 30 steps, shift 2, temperature 1.0).
+- Data: 4KLSDB is worth more per sample than ReLAION; ReLAION : 4KLSDB = 1 : 2 is best (small, replicated gain).
+- Input corruption: clean-trained models collapse on JPEG inputs (patch FID 47 vs 2.5) and degrade on blurry inputs; 20% corruption (JPEG weighted) costs +0.11 on the bilinear benchmark and fixes most of it (JPEG 10.4). Adopted for the pretrain.
+- References: VAE oracle 0.71 (Wan 1.30), pixel bicubic 8.12; best 30 min model 2.45 (clean) / 2.55 (with corruption).
+- Fixed: `crop_maximal_rectangle` silently used INTER_LINEAR (the cv2 flag was passed as `dst`); it is now antialiased by default, so new benchmark sets differ slightly from the Wan axis set.
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes? Need to find out if recipe advantages can be transfered across VAEs.
