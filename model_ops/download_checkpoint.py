@@ -3,7 +3,7 @@ Downloads the newest checkpoint of one or more runs (pretraining, distillation, 
 checkpoints bucket and converts each to a ComfyUI ready safetensors file (EMA or raw weights plus model config
 and architecture metadata).
 
-Usage: python model_ops/download_checkpoint.py [--run wan_pretrain_v1 wan_distill_v1 wan_small_s20m ...]
+Usage: python model_ops/download_checkpoint.py [--run wan_pretrain_v1 wan_distill_v1 wan_small_s20m flux_pretrain_v1 ...]
        [--weights ema|raw] [--output-dir DIR]
 """
 
@@ -14,18 +14,25 @@ from pathlib import Path
 import torch
 from safetensors.torch import save_file
 
+from stdev.flux_pretrain.model import FluxUpscalerTransformer
+from stdev.flux_pretrain.model import ModelConfig as FluxModelConfig
 from stdev.s3_tools import download_archive, get_s3_client
 from stdev.wan_distill.student import WanStudentTransformer
-from stdev.wan_pretrain.model import ModelConfig, WanUpscalerTransformer
+from stdev.wan_pretrain.model import ModelConfig as WanModelConfig
+from stdev.wan_pretrain.model import WanUpscalerTransformer
 
 BUCKET_NAME = "checkpoints"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIRECTORY = REPOSITORY_ROOT / "models" / "latent_upscale_models"
-VAE_BY_RUN_PREFIX = {"wan_": "wan_2_1"}
-DEFAULT_ARCHITECTURE = "WanUpscalerTransformer"
+VAE_BY_RUN_PREFIX = {"wan_": "wan_2_1", "flux_": "flux_2"}
+DEFAULT_ARCHITECTURE_BY_VAE = {
+    "wan_2_1": "WanUpscalerTransformer",
+    "flux_2": "FluxUpscalerTransformer",
+}
 ARCHITECTURES = {
-    DEFAULT_ARCHITECTURE: WanUpscalerTransformer,
-    "WanStudentTransformer": WanStudentTransformer,
+    "WanUpscalerTransformer": (WanUpscalerTransformer, WanModelConfig),
+    "WanStudentTransformer": (WanStudentTransformer, WanModelConfig),
+    "FluxUpscalerTransformer": (FluxUpscalerTransformer, FluxModelConfig),
 }
 
 
@@ -42,15 +49,11 @@ def convert(
 ) -> Path:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     model_config = dict(checkpoint["model_config"])
-    architecture = checkpoint.get("architecture", DEFAULT_ARCHITECTURE)
+    architecture = checkpoint.get("architecture", DEFAULT_ARCHITECTURE_BY_VAE[vae_name])
     step = checkpoint["state"]["step"]
     if weights == "ema":
-        names = [
-            name
-            for name, _ in ARCHITECTURES[architecture](
-                ModelConfig(**model_config)
-            ).named_parameters()
-        ]
+        model_class, config_class = ARCHITECTURES[architecture]
+        names = [name for name, _ in model_class(config_class(**model_config)).named_parameters()]
         tensors = {
             name: tensor.float().contiguous()
             for name, tensor in zip(names, checkpoint["ema"], strict=True)

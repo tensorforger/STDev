@@ -8,6 +8,7 @@ import importlib
 NODE_MODULES = (
     "stdev.comfy_nodes.wan_2_1.nodes",
     "stdev.comfy_nodes.wan_2_1.distilled_nodes",
+    "stdev.comfy_nodes.flux_2.nodes",
 )
 
 NODE_CLASS_MAPPINGS: dict = {}
