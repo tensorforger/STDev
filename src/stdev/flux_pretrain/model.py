@@ -357,7 +357,19 @@ class FluxUpscalerTransformer(nn.Module):
         returns:
             velocity: [B, C, H, W] (noise - residual)
         """
-        condition = self.conditioning(sigmas, hff, hff_mask)
+        return self.forward_with_condition(noisy_residual, self.conditioning(sigmas, hff, hff_mask), latents_source)
+
+    def forward_with_condition(
+        self, noisy_residual: torch.Tensor, condition: torch.Tensor, latents_source: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        args:
+            noisy_residual: [B, C, H, W]
+            condition: [B, condition_dim], output of the conditioning encoder
+            latents_source: [B, C, H / 2, W / 2], normalized FLUX.2 latents
+        returns:
+            velocity: [B, C, H, W] (noise - residual)
+        """
         stacked = torch.cat([noisy_residual, align_source(latents_source).to(noisy_residual.dtype)], dim=1)
         features = self.input_conv(stacked) + self.source_encoder(latents_source.to(noisy_residual.dtype))  # [B, D, H, W]
         tokens = features.permute(0, 2, 3, 1)  # [B, H, W, D]
