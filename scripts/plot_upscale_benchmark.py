@@ -2,10 +2,11 @@
 Plots the unified upscale benchmark: latency (log) against patch_fid (log, inverted axis, higher is better).
 Latent upscalers are circles (ours colored, others grey), the other solutions (image upscalers, decoder
 fine-tune, bicubic) are grey squares. A blue curve connects our solutions. Ground truth hff variants
-(`*_gt_hff`) are not plotted.
+(`*_gt_hff`) and solutions evaluated on a subset without patch_fid are not plotted.
 
 Run:
     python scripts/plot_upscale_benchmark.py
+    python scripts/plot_upscale_benchmark.py --results-directory raw_results/flux_upscale_benchmark_axis_v1_1k
 """
 
 import argparse
@@ -18,7 +19,13 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS_DIRECTORY = REPOSITORY_ROOT / "raw_results" / "upscale_benchmark_axis_v1_1k"
 OUR_PREFIX = "ours_"
 GROUND_TRUTH_HFF_SUFFIX = "_gt_hff"
-OTHER_LATENT_UPSCALERS = ("latent_bicubic_decode", "wan_nn_latent_upscaler", "sesquilsr")
+OTHER_LATENT_UPSCALERS = (
+    "latent_bicubic_decode",
+    "wan_nn_latent_upscaler",
+    "sesquilsr",
+    "flow_upscaler",
+    "flow_upscaler_tiny_vae",
+)
 OUR_COLOR = "tab:blue"
 
 
@@ -35,7 +42,7 @@ def plot_results(results: dict[str, dict], output_path: Path) -> None:
     results = {
         name: result
         for name, result in results.items()
-        if not name.endswith(GROUND_TRUTH_HFF_SUFFIX)
+        if not name.endswith(GROUND_TRUTH_HFF_SUFFIX) and result["metrics"]["patch_fid"] is not None
     }
     latencies = {name: result["metrics"]["latency_ms"] for name, result in results.items()}
     patch_fids = {name: result["metrics"]["patch_fid"] for name, result in results.items()}

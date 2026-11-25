@@ -44,10 +44,12 @@ def run_inference(
     predictions_directory: Path,
     seed: int,
     num_warmup_samples: int,
+    input_shape: tuple[int, ...] = (LATENT_CHANNELS, 1, INPUT_LATENT_SIZE, INPUT_LATENT_SIZE),
 ) -> dict[str, float]:
     """
     Loads the solution, warms it up on random latents, then upscales every dataset sample with batch size 1 and
-    saves the 1024x1024 predictions as PNG. Latency is the synchronized wall time of `upscale` (decoding included),
+    saves the 1024x1024 predictions as PNG. `input_shape` is the per sample latent shape of the warmup inputs.
+    Latency is the synchronized wall time of `upscale` (decoding included),
     peak VRAM is the peak of allocated CUDA memory above the level before loading (weights included).
 
     returns:
@@ -62,15 +64,7 @@ def run_inference(
 
     generator = torch.Generator(device="cuda").manual_seed(seed)
     for _ in tqdm(range(num_warmup_samples), desc=f"{solution.name} warmup", leave=False):
-        fake_latents = torch.randn(
-            1,
-            LATENT_CHANNELS,
-            1,
-            INPUT_LATENT_SIZE,
-            INPUT_LATENT_SIZE,
-            generator=generator,
-            device="cuda",
-        )
+        fake_latents = torch.randn(1, *input_shape, generator=generator, device="cuda")
         solution.upscale(fake_latents, seed, torch.rand(1, generator=generator, device="cuda"))
     torch.cuda.synchronize()
 
