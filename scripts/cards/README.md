@@ -24,9 +24,14 @@ Inputs: ComfyUI results in `../comfyui_results` (`--input-directory`), benchmark
 | `make_models_lineup.py` | `models_lineup` | 2400x1350 |
 | `make_workflow.py` | `workflow` (screenshot at native resolution) | 1920x(fit) |
 | `make_covers.py` | `cover_banner_21x9`, `cover_16x9`, `cover_social_2x1`, `icon_400` | 2520x1080, 1920x1080, 1280x640, 400x400 |
-| `make_flux2_comparisons.py` | `flux2_compare_{cat,neon,steppe,coffee,gulls,food,newspaper}` (input `../comfy_results_flux_2`) | 2400x1350 |
+| `make_flux2_comparisons.py` | `flux2_compare_{cat,neon,steppe,coffee,gulls,food,newspaper}` (input `../comfy_results_flux_2`, zooms from `flux2_zooms.json`) | 2400x1350 |
 | `make_flux2_benchmark_plot.py` | `flux2_benchmark_plot` (`raw_results/flux_upscale_benchmark_axis_v1_1k`) | 2400x1350 |
 | `make_video.py` | `video_compare.mp4`, `video_compare_zoom.mp4` | 2568x1024, 32 fps |
+
+Zoom editor of the FLUX.2 comparison cards: `python scripts/cards/edit_flux2_zooms.py` (tkinter) shows the boxes of
+`flux2_zooms.json` on each image: drag to move, drag a corner or use the wheel to resize, +/- for the row weight
+(box shape), live bicubic | Steppe preview, `r` renders the full card, Ctrl+S saves the JSON. Then rerun
+`make_flux2_comparisons.py`.
 
 Every card is written as PNG (master) and JPG (web). Patch comparisons: the bicubic tile is upscaled by the same
 factor as the Steppe output, then both get the same display resize.
