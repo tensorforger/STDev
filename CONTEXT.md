@@ -160,10 +160,22 @@ Same pattern as section 13: the normalized FLUX.2 latent of a 512 image in (no p
 - Hildegard (klein 9B fp8 + LoRA, ComfyUI, constant README prompt) was measured on 30 images only, without FID (~7 s per image, 11.9 GB). With the official reference weights (0.9 / 0.8 / 0.8) it redraws subjects (ΔE00 6.6). With weights 1.0 it is aligned and detailed, but ΔE00 3.8 vs 2.2 for ours.
 - Report: `reports/flux_upscaling_benchmark.md`. Code: `scripts/run_flux_upscale_benchmark.py`, `src/stdev/flux_upscale_benchmark/`, `scripts/run_hildegard_benchmark.py` (ComfyUI venv), `src/stdev/vaes/tiny_flux_2_vae.py`. Results: `raw_results/flux_upscale_benchmark_axis_v1_1k/`.
 
+### 20. Public release "Steppe-Flux.2" (2026-11-26)
+
+- Steppe-ComfyUI was updated to support new models
+- New weights were uploaded to [Steppe-Flux.2](https://huggingface.co/TensorForger/Steppe-Flux.2)
+
+New insights from release and testing: 
+
+- Community asks for **Minimax-H3** VAE support.
+- There was also a request to lower VRAM requirements.
+- From testing: requires more anime and vector images in dataset.
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes? Need to find out if recipe advantages can be transfered across VAEs.
 2. Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained. See `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
+3. How to make training faster and train better model with same compute budget? Low-precision training?
 
 ## Plan
 
