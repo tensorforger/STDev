@@ -1,6 +1,6 @@
 ## Context handling
 
-This repository can be cloned to different machines, training environments with several GPUs are not persistent, everything that is not tracked by git or uploaded to R2 storage would be wiped out after training or research. To track the context and knowledge we are using:
+This repository can be cloned to different machines, training environments with several GPUs are not persistent. To track the context and knowledge we are using these files:
 
 - **CONTEXT.md** - long-term context of the project, only short paragraphs, high level findings.
 - **./reports** - more details, tables, numbers, script entry points.
