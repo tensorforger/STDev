@@ -2,15 +2,12 @@
 
 Incremental history and knowledge overview for agents and decision making. Newest notes are at the bottom. Details live in `reports/` and `autoresearch/`; this file only summarizes and links. It does not describe the codebase.
 
-## Goal
+## Goals
 
-Generative latent upscaler(s) that support many generative models and many VAE latent spaces.
-
-- A single-step "latent upscale adapter" is a regression model. A generative latent upscaler is itself a generative model: it needs no extra denoise passes of the base model, and its output can be decoded directly by the VAE into a high quality, high resolution image.
-- Related work:
-  - https://github.com/tensorforger/comfyui-flow-upscaler: earlier project of the author, FLUX.2 only.
-  - https://arxiv.org/abs/2511.10629: main LUA paper.
-  - Model providers start to ship their own latent upscalers: LTX 2.3 (open weights), MiniMax-H3 (API only so far).
+- Explore generative latent upscalers in different VAE latent spaces. 
+- Find what can be practical.
+- Scale it up, train better models.
+- Make it practical.
 
 ## History
 
