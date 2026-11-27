@@ -171,11 +171,25 @@ New insights from release and testing:
 - There was also a request to lower VRAM requirements.
 - From testing: requires more anime and vector images in dataset.
 
+### 21. Autoresearch on Qwen-Image 2.1 latents (phase 4: 512 -> 1024, 2026-11-26 / 27): VAE marked problematic
+
+Setup: 8 rounds on 4 RTX 5090 (run_0000 - run_0030, mostly 30 min, last round 1 h), 40k 4KLSDB images, fixed Axis-V1 1k benchmark decoded with the texture-fix decoder (the official one roughly doubles the oracle patch FID: 2.44 vs 1.07). New research setup: single dataset, no hff, no corruption, ~50M model, single resolution. Log and final summary: `autoresearch_4/experiment_logs.md` ("FINAL SUMMARY"); code `src/stdev/qwen_upscalers/`, `src/stdev/qwen_benchmark/`, `qwen_infra/`, data `scripts/encode_qwen_datasets.py`.
+
+- The VAE is Qwen-Image-VAE-2.0 f16c64 (arXiv 2605.13565): 64 channels, 16x, no KL, DINOv2 aligned latents, decoder without GAN. A token covers 16x16 px, so the "high" latent band holds coarse, input-determined content, and the decoder turns any small off-manifold latent error into colour blotches (10% relative noise: 29.7 dB vs FLUX.2 40.2 / Wan 33.3). Latent L2 is a poor proxy: a re-encoded bicubic image is further away in L2 than the models but decodes far better.
+- Best latent-only result: patch FID 5.75 (97M, 1 h; bicubic 8.69), but FID 4.4 vs bicubic 2.2 and worse colour. It is a hard plateau: neither 4x tokens, nor 6x parameters, nor 2x time move it (flow loss and latent MSE keep improving, decoded quality does not). Decoder-in-the-loop losses fail in every form (implementation verified).
+- Transferable findings: per-channel shift + scale residual normalization, a frequency weighted flow loss (velocity error above half Nyquist x16), sampling shift 3-4, RoPE + mask-free shifted windows (+5% speed, slightly better), whole-model compile with max-autotune (+14% training speed).
+- Precision: FP8 training keeps quality but gives only +1-5% speed (GEMMs are ~36% of a step); torchao MXFP8 / NVFP4 training does not run on this stack. FP8 post-training quantization is lossless and -22% latency.
+- A factorization diagnosis (decode -> bicubic -> encode base + generated delta) reaches 4.71, but it needs the VAE round trip at inference and was rejected as a recipe. Next pretrain uses another VAE; ideas for a revisit are in the log.
+
+### 22. Ming-Image 0.2 Design VAE check (2026-11-27)
+
+Quick check of the new RGBA VAE of Ming-Image-0.2-Design (released 2026-11-25), whether it shares the Qwen-Image 2.1 problems. It is byte-identical to the Qwen-Image-Layered RGBA VAE (Wan 2.1 / Qwen-Image 1 architecture, 8x, 16 channels), but its latent space differs from Wan's (raw std ~0.116, per channel linear R2 0.80 to Wan). Verdict: not likely problematic. Robust decoder (10% latent noise 39.5 dB vs Qwen-Image 2.1 29.8, FLUX.2 40.6), band tests like Wan / FLUX.2. The 2x task is detail heavy like FLUX.2 (the bilinear source explains 21% of the target variance; FLUX.2 41%, Wan 85%). KL use cannot be determined (unconstrained log-variance head), but Wan 2.1 is effectively KL-free too, so this is not the deciding factor. Report: `reports/ming_image_vae_check.md`; wrapper `src/stdev/vaes/ming_image_vae.py` (own per channel statistics; the Qwen-Image-Layered config's Wan statistics do not fit). One 30 min round (`autoresearch_5/experiment_logs.md`, 40k 4KLSDB, Axis 1k): the VAE round trip is lossy on photos (oracle patch FID 3.57 vs FLUX.2 0.71; pixel bicubic 10.58). The FLUX.2 recipe transfers as is (6.92); with the autoresearch_4 package (mean centered residual, RoPE / mask-free windows, full compile) and initial noise temperature 0.9 the best is 6.34 / fid 3.25, ~60% of the bicubic -> oracle gap (FLUX.2 77%, Qwen-Image 2.1 36%). Residual vs direct: no difference; the frequency weighted loss does not help on this VAE.
+
 ## Open problems
 
 1. Flux.2 tested at scale as the direct hr latent generator. Autoresearch 2 found that Wan 2.1 VAE requires generation of residuals. So, is there a single optimal approach for all VAEs? Or universal abstraction that covers both modes? Need to find out if recipe advantages can be transfered across VAEs.
 2. Small important details (text, background faces) are where upscalers fail. Hypothesis: they are rare per pixel area in high resolution training images, so their prior is undertrained. See `autoresearch_2/experiment_logs.md` ("OPEN QUESTION: training scales").
-3. How to make training faster and train better model with same compute budget? Low-precision training?
+3. How to make training faster and train better model with same compute budget? Low-precision training? (Partly answered in section 21: FP8 keeps quality but gives only +1-5% at these sizes; compile and kernel-friendly attention give more.)
 
 ## Plan
 

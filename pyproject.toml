@@ -36,6 +36,7 @@ dependencies = [
     "pyarrow",
     "dotenv",
     "spandrel",
+    "torchao>=0.18.0",
 ]
 
 [project.optional-dependencies]

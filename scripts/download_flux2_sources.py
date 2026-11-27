@@ -13,6 +13,7 @@ Each process handles every `world_size`-th url / parquet file; an interrupted ru
 Run (repository root, `.env` with HF_TOKEN):
     for rank in 0 1 2 3 4 5 6 7; do python scripts/download_flux2_sources.py relaion --rank $rank --world-size 8 & done
     for rank in 0 1 2 3 4 5 6 7; do python scripts/download_flux2_sources.py 4klsdb --rank $rank --world-size 8 & done
+Autoresearch_4 (Qwen-Image 2.1, 40k 4KLSDB images) uses `--num-files 65`.
 """
 
 import argparse
@@ -65,6 +66,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("source", choices=["relaion", "4klsdb"])
     parser.add_argument("--rank", type=int, default=0)
     parser.add_argument("--world-size", type=int, default=1)
+    parser.add_argument(
+        "--num-files", type=int, default=LSDB_NUM_FILES, help="4klsdb: number of train_x4 parquet files."
+    )
     return parser.parse_args()
 
 
@@ -218,13 +222,13 @@ def process_lsdb_file(file_index: int, file_name: str, executor: ThreadPoolExecu
     parquet_path.unlink()
 
 
-def download_lsdb(rank: int, world_size: int) -> None:
+def download_lsdb(rank: int, world_size: int, num_files: int) -> None:
     LSDB_DIRECTORY.mkdir(parents=True, exist_ok=True)
     train_files = sorted(
         name
         for name in HfApi().list_repo_files(LSDB_DATASET_NAME, repo_type="dataset")
         if name.startswith(LSDB_TRAIN_FILE_PREFIX) and name.endswith(".parquet")
-    )[:LSDB_NUM_FILES]
+    )[:num_files]
     rank_files = list(enumerate(train_files))[rank::world_size]
     with ThreadPoolExecutor(LSDB_DECODE_THREADS) as executor:
         for file_index, file_name in tqdm(rank_files, desc=f"4klsdb [rank {rank}]", position=rank):
@@ -237,7 +241,7 @@ def main() -> None:
     if arguments.source == "relaion":
         download_relaion(arguments.rank, arguments.world_size)
     else:
-        download_lsdb(arguments.rank, arguments.world_size)
+        download_lsdb(arguments.rank, arguments.world_size, arguments.num_files)
 
 
 if __name__ == "__main__":
