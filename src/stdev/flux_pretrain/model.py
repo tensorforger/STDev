@@ -172,9 +172,9 @@ class SourceEncoder(nn.Module):
     projection to the transformer width.
     """
 
-    def __init__(self, channels: int, output_channels: int, num_blocks: int) -> None:
+    def __init__(self, channels: int, output_channels: int, num_blocks: int, input_channels: int = LATENT_CHANNELS) -> None:
         super().__init__()
-        self.input_conv = nn.Conv2d(LATENT_CHANNELS, channels, 3, padding=1)
+        self.input_conv = nn.Conv2d(input_channels, channels, 3, padding=1)
         self.blocks = nn.Sequential(*(PlainResidualBlock(channels) for _ in range(num_blocks)))
         self.upsample_norm = make_group_norm(channels)
         self.upsample = nn.Conv2d(channels, 4 * channels, 3, padding=1)
